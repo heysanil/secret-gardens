@@ -226,18 +226,6 @@ export function createPrincipalResolver(
 }
 
 /**
- * Effective project role of a service principal for RESPONSE SHAPING only
- * (scope read → 'read', read_write → 'write'). Authorization for service
- * principals is fully decided by serviceTokenAllows inside the guard —
- * never feed this value into roleAllows for a service principal: it would
- * grant role permissions (versions.read, audit.read, …) the token must not
- * have.
- */
-function serviceEffectiveRole(scope: ServiceTokenScope): ProjectRole {
-  return scope === "read_write" ? "write" : "read";
-}
-
-/**
  * Route guards as Elysia macros:
  *   { requireAuth: true }          → 401 unless a principal resolves; 403 for
  *                                    service principals (no project context)
@@ -251,7 +239,11 @@ function serviceEffectiveRole(scope: ServiceTokenScope): ProjectRole {
  *                                  → like requireProject for users, but also
  *                                    admits service principals whose token
  *                                    allows `serviceAction` (see
- *                                    ServiceAccessSpec). Exposes a Principal.
+ *                                    ServiceAccessSpec). Exposes a Principal
+ *                                    and a projectRole that is null for
+ *                                    service principals — they have no role;
+ *                                    serviceTokenAllows already decided
+ *                                    authorization in the guard.
  * All guards share one memoized principal resolution per request.
  */
 export function principalPlugin(deps: PrincipalDeps) {
@@ -343,13 +335,17 @@ export function principalPlugin(deps: PrincipalDeps) {
             return {
               project: access.project,
               principal: access.principal as Principal,
-              projectRole: access.projectRole,
+              projectRole: access.projectRole as ProjectRole | null,
             };
           case "ok_service":
             return {
               project: access.project,
               principal: access.principal as Principal,
-              projectRole: serviceEffectiveRole(access.principal.scope),
+              // Service principals have NO project role — never synthesize
+              // one from the scope: feeding it into roleAllows would grant
+              // role permissions (versions.read, audit.read, …) the token
+              // must not have. Handlers needing a role must handle null.
+              projectRole: null as ProjectRole | null,
             };
         }
       },

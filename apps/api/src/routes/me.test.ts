@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { TOKEN_PREFIXES } from "@safe/shared";
 import { createTestApp, signUp, type TestApp } from "../../test/testApp";
@@ -476,6 +476,54 @@ describe("PAT-minted token lifetime cap", () => {
     const body = (await res.json()) as { expiresAt: number };
     expect(body.expiresAt).toBeGreaterThanOrEqual(before + 7 * DAY_MS);
     expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + 7 * DAY_MS);
+    ctx.close();
+  });
+
+  test("parent expiring between resolution and insert → 422 parent_token_expired", async () => {
+    const ctx = await createTestApp(redis);
+    const { cookie } = await setupOwner(ctx);
+    const parent = (await (
+      await createToken(ctx, cookie, {
+        name: "racing parent",
+        expiresInDays: 1,
+      })
+    ).json()) as { id: string; token: string };
+
+    const t0 = Date.now();
+    const parentExpiresAt = t0 + 5_000;
+    ctx.db.run("UPDATE user_tokens SET expires_at = ? WHERE id = ?", [
+      parentExpiresAt,
+      parent.id,
+    ]);
+
+    // A parent that is already expired at request time is rejected with 401
+    // during principal resolution, so the handler's born-expired guard only
+    // fires in the race where the parent expires BETWEEN resolution and the
+    // cap computation. Simulate exactly that: the request's first Date.now()
+    // call (resolution) sees the parent as still valid; every later call
+    // (the handler) lands past its expiry.
+    let calls = 0;
+    const nowSpy = spyOn(Date, "now").mockImplementation(() => {
+      calls += 1;
+      return calls === 1 ? t0 : parentExpiresAt + 1;
+    });
+    try {
+      const res = await createTokenViaBearer(ctx, parent.token, {
+        name: "born expired",
+      });
+      expect(res.status).toBe(422);
+      expect(await res.json()).toEqual({ error: "parent_token_expired" });
+    } finally {
+      nowSpy.mockRestore();
+    }
+
+    // Nothing was inserted.
+    const count = ctx.db
+      .query<{ n: number }, []>(
+        "SELECT COUNT(*) AS n FROM user_tokens WHERE name = 'born expired'",
+      )
+      .get();
+    expect(count?.n).toBe(0);
     ctx.close();
   });
 });

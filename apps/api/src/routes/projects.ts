@@ -239,16 +239,18 @@ export function projectsRoutes(deps: ProjectsDeps) {
       .get(
         "/api/projects/:projectId",
         ({ project, principal, projectRole }) => {
-          if (principal.type === "service") {
+          if (principal.type === "service" || projectRole === null) {
             // DELIBERATE service-token exception: CI needs the project
             // detail to resolve environment slugs → ids before pulling
             // secrets. The response is filtered — id/name/slug plus only
             // the environments the token may access (all when the token is
-            // unscoped); no role/description/timestamps.
+            // unscoped); no role/description/timestamps. projectRole is
+            // null exactly for service principals; checking both narrows
+            // the type for the user branch below.
+            const allowedEnvIds =
+              principal.type === "service" ? principal.environmentIds : null;
             const environments = environmentsOf(project.id).filter(
-              (env) =>
-                principal.environmentIds === null ||
-                principal.environmentIds.includes(env.id),
+              (env) => allowedEnvIds === null || allowedEnvIds.includes(env.id),
             );
             return {
               id: project.id,

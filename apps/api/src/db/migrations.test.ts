@@ -108,6 +108,16 @@ describe("runMigrations", () => {
         "INSERT INTO user_tokens (id, user_id, name, token_hash, token_prefix, created_at, created_via) VALUES ('ut_b', 'usr_x', 't', 'h2', 'p', 1, 'magic')",
       ),
     ).toThrow();
+    // 'token' is the other allowed value.
+    db.run(
+      "INSERT INTO user_tokens (id, user_id, name, token_hash, token_prefix, created_at, created_via) VALUES ('ut_c', 'usr_x', 't', 'h3', 'p', 1, 'token')",
+    );
+    const tokenRow = db
+      .query<{ created_via: string }, []>(
+        "SELECT created_via FROM user_tokens WHERE id = 'ut_c'",
+      )
+      .get();
+    expect(tokenRow?.created_via).toBe("token");
     db.close();
   });
 

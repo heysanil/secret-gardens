@@ -176,6 +176,28 @@ describe("GET /api/projects/:projectId/audit", () => {
     expect(seen.slice(0, 12)).toEqual([...seeded].reverse());
   });
 
+  for (const bad of ["garbage", "(123-0", "123", "12-3-4", "1-0 extra"]) {
+    test(`malformed cursor "${bad}" → 422 invalid_cursor`, async () => {
+      const res = await api(
+        ctx.app,
+        "GET",
+        auditPath(`?cursor=${encodeURIComponent(bad)}`),
+        { cookie: owner.cookie },
+      );
+      expect(res.status).toBe(422);
+      expect(await res.json()).toEqual({ error: "invalid_cursor" });
+    });
+  }
+
+  test("a well-formed cursor older than every entry returns an empty page", async () => {
+    await seedEntries(3);
+    const res = await api(ctx.app, "GET", auditPath("?cursor=1-0"), {
+      cookie: owner.cookie,
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ entries: [], nextCursor: null });
+  });
+
   test("action filter returns only matching entries; unknown action → 422", async () => {
     await seedEntries(3);
     const filtered = await api(

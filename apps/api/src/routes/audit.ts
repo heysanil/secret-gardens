@@ -13,6 +13,9 @@ export interface AuditDeps {
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
+/** Stream entry id shape (`<ms>-<seq>`) — the only cursor form we mint. */
+const CURSOR_RE = /^\d+-\d+$/;
+
 const KNOWN_ACTIONS: ReadonlySet<string> = new Set(AUDIT_ACTIONS);
 
 /**
@@ -43,6 +46,11 @@ export function auditRoutes(deps: AuditDeps) {
           opts.action = query.action as AuditAction;
         }
         if (query.cursor !== undefined) {
+          // Cursors are opaque to clients but must be well-formed entry
+          // ids before they reach Redis as an XREVRANGE bound.
+          if (!CURSOR_RE.test(query.cursor)) {
+            return status(422, { error: "invalid_cursor" });
+          }
           opts.cursor = query.cursor;
         }
         if (query.envId !== undefined) {

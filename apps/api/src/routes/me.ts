@@ -66,7 +66,7 @@ export function meRoutes(deps: MeDeps) {
     )
     .post(
       "/api/me/tokens",
-      async ({ principal, authMethod, body, set }) => {
+      async ({ principal, authMethod, body, set, status }) => {
         const token =
           TOKEN_PREFIXES.userToken + randomBytes(32).toString("base64url");
         const tokenPrefix = token.slice(0, TOKEN_DISPLAY_PREFIX_LEN);
@@ -82,6 +82,12 @@ export function meRoutes(deps: MeDeps) {
             authMethod.expiresAt === null
               ? now + PAT_MINTED_MAX_MS
               : Math.min(now + PAT_MINTED_MAX_MS, authMethod.expiresAt);
+          // The parent may have expired between principal resolution and
+          // this point (or a skewed clock may place its expiry in the
+          // past); never mint a born-expired token from it.
+          if (cap <= now) {
+            return status(422, { error: "parent_token_expired" });
+          }
           expiresAt = expiresAt === null ? cap : Math.min(expiresAt, cap);
         }
         db.run(
