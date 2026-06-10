@@ -10,10 +10,17 @@ import {
 } from "./db/instance";
 import type { AuditLog } from "./redis/audit";
 import type { RedisLike } from "./redis/client";
+import { createSecretStore } from "./redis/secretStore";
 import { bootstrapRoutes } from "./routes/bootstrap";
+import { environmentsRoutes } from "./routes/environments";
 import { healthRoutes } from "./routes/health";
 import { meRoutes } from "./routes/me";
+import { membersRoutes } from "./routes/members";
+import { projectsRoutes } from "./routes/projects";
+import { secretsRoutes } from "./routes/secrets";
 import { usersRoutes } from "./routes/users";
+import { createDekService } from "./services/dekService";
+import { createSecretService } from "./services/secretService";
 
 export interface AppDeps {
   db: Database;
@@ -72,7 +79,11 @@ async function appendFailedLogin(
  * type extraction.
  */
 export function createApp(deps: AppDeps) {
-  const { db, auth, audit } = deps;
+  const { db, redis, config, auth, audit } = deps;
+  // Pure wiring (closures only, no IO) — createApp stays side-effect-free.
+  const secretStore = createSecretStore(redis);
+  const dekService = createDekService({ db, masterKey: config.masterKey });
+  const secretService = createSecretService({ dekService, secretStore });
   return (
     new Elysia()
       // Signup gate: once a first user exists and allow_signup has been
@@ -108,6 +119,20 @@ export function createApp(deps: AppDeps) {
       .use(bootstrapRoutes(deps))
       .use(meRoutes(deps))
       .use(usersRoutes(deps))
+      .use(
+        projectsRoutes({
+          db,
+          auth,
+          audit,
+          redis,
+          dekService,
+          secretService,
+          secretStore,
+        }),
+      )
+      .use(environmentsRoutes({ db, auth, audit, secretStore }))
+      .use(membersRoutes({ db, auth, audit }))
+      .use(secretsRoutes({ db, auth, audit, secretService }))
   );
 }
 

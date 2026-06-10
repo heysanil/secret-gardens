@@ -83,6 +83,55 @@ export async function signIn(
   return { res, cookie: cookieHeader(res) };
 }
 
+/** JSON request against app.handle with an optional session cookie. */
+export async function api(
+  app: App,
+  method: string,
+  path: string,
+  opts: { cookie?: string; body?: unknown } = {},
+): Promise<Response> {
+  const headers: Record<string, string> = {};
+  if (opts.cookie !== undefined) {
+    headers.cookie = opts.cookie;
+  }
+  let body: string | undefined;
+  if (opts.body !== undefined) {
+    headers["content-type"] = "application/json";
+    body = JSON.stringify(opts.body);
+  }
+  return app.handle(
+    new Request(`http://localhost${path}`, { method, headers, body }),
+  );
+}
+
+/** Signs up a user and returns their session cookie and user id. */
+export async function signUpUser(
+  app: App,
+  tag: string,
+): Promise<{ cookie: string; userId: string; email: string }> {
+  const email = `${tag}-${crypto.randomUUID()}@test.dev`;
+  const { res, cookie } = await signUp(app, { email, password: "password123" });
+  const body = (await res.json()) as { user: { id: string } };
+  return { cookie, userId: body.user.id, email };
+}
+
+/**
+ * Creates a member-role user via the admin API and signs them in.
+ * Requires an owner/admin session cookie.
+ */
+export async function createMemberUser(
+  app: App,
+  adminCookie: string,
+  tag: string,
+): Promise<{ cookie: string; userId: string; email: string }> {
+  const email = `${tag}-${crypto.randomUUID()}@test.dev`;
+  const password = "memberpass123";
+  const res = await adminCreateUser(app, adminCookie, { email, password });
+  const created = (await res.json()) as { user: { id: string } };
+  const { cookie } = await signIn(app, { email, password });
+  return { cookie, userId: created.user.id, email };
+}
+
 /** Creates a 'member'-role user via the better-auth admin API. */
 export async function adminCreateUser(
   app: App,
