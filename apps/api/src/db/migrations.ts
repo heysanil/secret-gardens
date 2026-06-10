@@ -98,6 +98,15 @@ const MIGRATION_002_MEMBERSHIP_CREATED_AT = `
 ALTER TABLE project_memberships ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0;
 `;
 
+/**
+ * Tracks how a PAT was minted: 'session' (browser cookie session) or 'token'
+ * (created by another PAT, e.g. CLI-minted). Token-created PATs get a
+ * server-side expiry cap so a leaked PAT cannot mint immortal successors.
+ */
+const MIGRATION_003_USER_TOKEN_CREATED_VIA = `
+ALTER TABLE user_tokens ADD COLUMN created_via TEXT NOT NULL DEFAULT 'session' CHECK (created_via IN ('session','token'));
+`;
+
 export interface Migration {
   name: string;
   sql: string;
@@ -109,5 +118,9 @@ export const MIGRATIONS: readonly Migration[] = [
   {
     name: "002_membership_created_at",
     sql: MIGRATION_002_MEMBERSHIP_CREATED_AT,
+  },
+  {
+    name: "003_user_token_created_via",
+    sql: MIGRATION_003_USER_TOKEN_CREATED_VIA,
   },
 ];

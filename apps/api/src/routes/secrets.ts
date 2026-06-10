@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import {
   MAX_BULK_SECRETS,
+  type Principal,
   roleAllows,
   validateSecretKey,
   validateSecretValue,
@@ -25,6 +26,11 @@ export interface SecretsDeps {
  * Secrets routes under /api/projects/:projectId/environments/:envId/secrets.
  * The envId is always validated to belong to the project (else 404) so a
  * valid project role can never be replayed against another project's env.
+ *
+ * Service principals are admitted via requireProjectAction: GET maps to
+ * 'secrets.read', the write routes to 'secrets.write' — the guard checks the
+ * token's scope and environment list against the :envId. Versions stay
+ * user-only (historical values outlive credential rotations).
  */
 export function secretsRoutes(deps: SecretsDeps) {
   const { db, audit, secretService } = deps;
@@ -38,8 +44,10 @@ export function secretsRoutes(deps: SecretsDeps) {
     return row?.id ?? null;
   }
 
-  function actorOf(userId: string): SecretActor {
-    return { type: "user", id: userId };
+  function actorOf(principal: Principal): SecretActor {
+    return principal.type === "user"
+      ? { type: "user", id: principal.userId }
+      : { type: "service_token", id: principal.tokenId };
   }
 
   return (
@@ -67,19 +75,25 @@ export function secretsRoutes(deps: SecretsDeps) {
             includeValues,
           });
           if (includeValues) {
+            const actor = actorOf(principal);
             await audit.appendAudit(
               { projectId: project.id },
               {
                 action: "secrets.read",
-                actorType: "user",
-                actorId: principal.userId,
+                actorType: actor.type,
+                actorId: actor.id,
                 fields: { envId, keys: String(secrets.length) },
               },
             );
           }
           return { secrets };
         },
-        { requireProject: "read" },
+        {
+          requireProjectAction: {
+            minRole: "read",
+            serviceAction: "secrets.read",
+          },
+        },
       )
       .put(
         "/",
@@ -103,11 +117,12 @@ export function secretsRoutes(deps: SecretsDeps) {
             return status(422, { error: "invalid_secrets", keys: offending });
           }
 
+          const actor = actorOf(principal);
           const result = await secretService.setSecrets(
             project.id,
             envId,
             body.secrets,
-            { prune: body.prune ?? false, actor: actorOf(principal.userId) },
+            { prune: body.prune ?? false, actor },
           );
 
           // One audit entry per changed key; unchanged keys are silent.
@@ -125,8 +140,8 @@ export function secretsRoutes(deps: SecretsDeps) {
                   { projectId: project.id },
                   {
                     action,
-                    actorType: "user",
-                    actorId: principal.userId,
+                    actorType: actor.type,
+                    actorId: actor.id,
                     fields: {
                       envId,
                       key: change.key,
@@ -147,7 +162,10 @@ export function secretsRoutes(deps: SecretsDeps) {
           };
         },
         {
-          requireProject: "write",
+          requireProjectAction: {
+            minRole: "write",
+            serviceAction: "secrets.write",
+          },
           body: t.Object({
             secrets: t.Record(t.String(), t.String()),
             prune: t.Optional(t.Boolean()),
@@ -167,26 +185,30 @@ export function secretsRoutes(deps: SecretsDeps) {
           if (validateSecretValue(body.value) !== null) {
             return status(422, { error: "invalid_value" });
           }
+          const actor = actorOf(principal);
           const { version, op } = await secretService.setSecret(
             project.id,
             envId,
             params.key,
             body.value,
-            actorOf(principal.userId),
+            actor,
           );
           await audit.appendAudit(
             { projectId: project.id },
             {
               action: op === "create" ? "secret.create" : "secret.update",
-              actorType: "user",
-              actorId: principal.userId,
+              actorType: actor.type,
+              actorId: actor.id,
               fields: { envId, key: params.key, version: String(version) },
             },
           );
           return { key: params.key, version, op };
         },
         {
-          requireProject: "write",
+          requireProjectAction: {
+            minRole: "write",
+            serviceAction: "secrets.write",
+          },
           body: t.Object({ value: t.String() }),
         },
       )
@@ -197,11 +219,12 @@ export function secretsRoutes(deps: SecretsDeps) {
           if (envId === null) {
             return status(404, { error: "not_found" });
           }
+          const actor = actorOf(principal);
           const version = await secretService.deleteSecret(
             project.id,
             envId,
             params.key,
-            actorOf(principal.userId),
+            actor,
           );
           if (version === null) {
             return status(404, { error: "not_found" });
@@ -210,14 +233,19 @@ export function secretsRoutes(deps: SecretsDeps) {
             { projectId: project.id },
             {
               action: "secret.delete",
-              actorType: "user",
-              actorId: principal.userId,
+              actorType: actor.type,
+              actorId: actor.id,
               fields: { envId, key: params.key, version: String(version) },
             },
           );
           return { deleted: true, version };
         },
-        { requireProject: "write" },
+        {
+          requireProjectAction: {
+            minRole: "write",
+            serviceAction: "secrets.write",
+          },
+        },
       )
       .get(
         "/:key/versions",
@@ -268,12 +296,13 @@ export function secretsRoutes(deps: SecretsDeps) {
           if (envId === null) {
             return status(404, { error: "not_found" });
           }
+          const actor = actorOf(principal);
           const result = await secretService.rollback(
             project.id,
             envId,
             params.key,
             body.toVersion,
-            actorOf(principal.userId),
+            actor,
           );
           if (!result.ok) {
             return result.reason === "not_found"
@@ -284,8 +313,8 @@ export function secretsRoutes(deps: SecretsDeps) {
             { projectId: project.id },
             {
               action: "secret.rollback",
-              actorType: "user",
-              actorId: principal.userId,
+              actorType: actor.type,
+              actorId: actor.id,
               fields: {
                 envId,
                 key: params.key,
@@ -297,7 +326,10 @@ export function secretsRoutes(deps: SecretsDeps) {
           return { version: result.version };
         },
         {
-          requireProject: "write",
+          requireProjectAction: {
+            minRole: "write",
+            serviceAction: "secrets.write",
+          },
           body: t.Object({ toVersion: t.Integer({ minimum: 1 }) }),
         },
       )

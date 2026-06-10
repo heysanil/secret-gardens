@@ -1,6 +1,10 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import type { InstanceRole, ProjectRole } from "@safe/shared";
+import type {
+  InstanceRole,
+  ProjectRole,
+  ServiceTokenScope,
+} from "@safe/shared";
 import { newId, openDb, runMigrations } from "../db";
 import type { PrincipalResolution } from "./principal";
 import { resolveProjectAccess } from "./projectGuard";
@@ -23,6 +27,28 @@ function userResolution(
   return {
     principal: { type: "user", userId, instanceRole },
     errorCode: null,
+    method: { kind: "session" },
+  };
+}
+
+function serviceResolution(
+  projectId: string,
+  opts: {
+    scope?: ServiceTokenScope;
+    environmentIds?: string[] | null;
+    tokenId?: string;
+  } = {},
+): PrincipalResolution {
+  return {
+    principal: {
+      type: "service",
+      tokenId: opts.tokenId ?? "st_1",
+      projectId,
+      scope: opts.scope ?? "read_write",
+      environmentIds: opts.environmentIds ?? null,
+    },
+    errorCode: null,
+    method: { kind: "service_token" },
   };
 }
 
@@ -33,6 +59,15 @@ function insertProject(): string {
     [projectId, projectId],
   );
   return projectId;
+}
+
+function insertEnv(projectId: string): string {
+  const envId = newId("env");
+  db.run(
+    "INSERT INTO environments (id, project_id, name, slug, position, created_at) VALUES (?, ?, 'E', ?, 0, 1)",
+    [envId, projectId, envId],
+  );
+  return envId;
 }
 
 function addMember(projectId: string, userId: string, role: ProjectRole): void {
@@ -48,7 +83,7 @@ describe("resolveProjectAccess", () => {
     expect(
       resolveProjectAccess(
         db,
-        { principal: null, errorCode: "invalid_token" },
+        { principal: null, errorCode: "invalid_token", method: null },
         projectId,
         "read",
       ),
@@ -56,28 +91,11 @@ describe("resolveProjectAccess", () => {
     expect(
       resolveProjectAccess(
         db,
-        { principal: null, errorCode: null },
+        { principal: null, errorCode: null, method: null },
         projectId,
         "read",
       ),
     ).toEqual({ kind: "unauthorized", error: "unauthorized" });
-  });
-
-  test("service principals are rejected until Phase 6", () => {
-    const projectId = insertProject();
-    const resolution: PrincipalResolution = {
-      principal: {
-        type: "service",
-        tokenId: "st_1",
-        projectId,
-        scope: "read_write",
-        environmentIds: null,
-      },
-      errorCode: null,
-    };
-    expect(resolveProjectAccess(db, resolution, projectId, "read")).toEqual({
-      kind: "service_unsupported",
-    });
   });
 
   test("nonexistent project and non-member both yield not_found (no existence leak)", () => {
@@ -165,5 +183,114 @@ describe("resolveProjectAccess", () => {
       "admin",
     );
     expect(access.kind).toBe("ok");
+  });
+});
+
+describe("resolveProjectAccess — service principals", () => {
+  test("another project (existing or not) → not_found, never forbidden", () => {
+    const own = insertProject();
+    const other = insertProject();
+    const resolution = serviceResolution(own);
+    expect(resolveProjectAccess(db, resolution, other, "read").kind).toBe(
+      "not_found",
+    );
+    expect(
+      resolveProjectAccess(db, resolution, "prj_nonexistent", "read").kind,
+    ).toBe("not_found");
+    expect(resolveProjectAccess(db, resolution, undefined, "read").kind).toBe(
+      "not_found",
+    );
+  });
+
+  test("own project without a ServiceAccessSpec → forbidden", () => {
+    const projectId = insertProject();
+    expect(
+      resolveProjectAccess(db, serviceResolution(projectId), projectId, "read")
+        .kind,
+    ).toBe("forbidden");
+  });
+
+  test("project.read grants ok_service on the own project only", () => {
+    const projectId = insertProject();
+    const access = resolveProjectAccess(
+      db,
+      serviceResolution(projectId, { scope: "read" }),
+      projectId,
+      "read",
+      { action: "project.read" },
+    );
+    if (access.kind !== "ok_service") {
+      throw new Error(`expected ok_service, got ${access.kind}`);
+    }
+    expect(access.project.id).toBe(projectId);
+    expect(access.principal.type).toBe("service");
+  });
+
+  test("secrets actions validate the envId belongs to the project (else not_found)", () => {
+    const projectId = insertProject();
+    const foreignEnv = insertEnv(insertProject());
+    const resolution = serviceResolution(projectId);
+    expect(
+      resolveProjectAccess(db, resolution, projectId, "read", {
+        action: "secrets.read",
+        envId: foreignEnv,
+      }).kind,
+    ).toBe("not_found");
+    expect(
+      resolveProjectAccess(db, resolution, projectId, "read", {
+        action: "secrets.read",
+      }).kind,
+    ).toBe("not_found");
+  });
+
+  test("scope gates secrets.write: read scope forbidden, read_write ok", () => {
+    const projectId = insertProject();
+    const envId = insertEnv(projectId);
+    expect(
+      resolveProjectAccess(
+        db,
+        serviceResolution(projectId, { scope: "read" }),
+        projectId,
+        "write",
+        { action: "secrets.write", envId },
+      ).kind,
+    ).toBe("forbidden");
+    expect(
+      resolveProjectAccess(
+        db,
+        serviceResolution(projectId, { scope: "read_write" }),
+        projectId,
+        "write",
+        { action: "secrets.write", envId },
+      ).kind,
+    ).toBe("ok_service");
+  });
+
+  test("environmentIds scoping: listed env ok, unlisted env forbidden, null = all", () => {
+    const projectId = insertProject();
+    const envA = insertEnv(projectId);
+    const envB = insertEnv(projectId);
+    const scoped = serviceResolution(projectId, { environmentIds: [envA] });
+    expect(
+      resolveProjectAccess(db, scoped, projectId, "read", {
+        action: "secrets.read",
+        envId: envA,
+      }).kind,
+    ).toBe("ok_service");
+    expect(
+      resolveProjectAccess(db, scoped, projectId, "read", {
+        action: "secrets.read",
+        envId: envB,
+      }).kind,
+    ).toBe("forbidden");
+    expect(
+      resolveProjectAccess(
+        db,
+        serviceResolution(projectId, { environmentIds: null }),
+        projectId,
+        "read",
+        { action: "secrets.read", envId: envB },
+      ).kind,
+    ).toBe("ok_service");
   });
 });

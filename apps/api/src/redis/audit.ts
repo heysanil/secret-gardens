@@ -53,6 +53,7 @@ export interface AuditLog {
 const RESERVED_FIELDS = new Set(["id", "ts", "action", "actorType", "actorId"]);
 const DEFAULT_LIMIT = 50;
 const MIN_FETCH_BATCH = 32;
+const MAX_FETCH_BATCH = 1024;
 
 function streamKey(scope: AuditScope): string {
   return scope === "instance" ? "audit:instance" : `audit:${scope.projectId}`;
@@ -170,7 +171,7 @@ export function createAuditLog(
         throw new Error("readAudit limit must be a positive integer");
       }
       const key = streamKey(scope);
-      const batch = Math.max(limit, MIN_FETCH_BATCH);
+      let batch = Math.max(limit, MIN_FETCH_BATCH);
       const entries: AuditEntry[] = [];
       let lastSeenId: string | null = opts.cursor ?? null;
       let nextCursor: string | null = null;
@@ -187,6 +188,7 @@ export function createAuditLog(
           String(batch),
         ]);
         const page = normalizeStreamEntries(raw);
+        const matchedBefore = entries.length;
         for (const item of page) {
           lastSeenId = item.id;
           const entry = toAuditEntry(item);
@@ -204,6 +206,12 @@ export function createAuditLog(
         }
         if (page.length < batch) {
           break; // stream exhausted
+        }
+        if (entries.length === matchedBefore) {
+          // The filters discarded the whole batch — grow geometrically
+          // (capped) so sparse matches over a long stream cost O(log n)
+          // round trips instead of thousands of fixed-size ones.
+          batch = Math.min(batch * 2, MAX_FETCH_BATCH);
         }
       }
 

@@ -11,6 +11,7 @@ import {
 import type { AuditLog } from "./redis/audit";
 import type { RedisLike } from "./redis/client";
 import { createSecretStore } from "./redis/secretStore";
+import { auditRoutes } from "./routes/audit";
 import { bootstrapRoutes } from "./routes/bootstrap";
 import { environmentsRoutes } from "./routes/environments";
 import { healthRoutes } from "./routes/health";
@@ -18,6 +19,7 @@ import { meRoutes } from "./routes/me";
 import { membersRoutes } from "./routes/members";
 import { projectsRoutes } from "./routes/projects";
 import { secretsRoutes } from "./routes/secrets";
+import { tokensRoutes } from "./routes/tokens";
 import { usersRoutes } from "./routes/users";
 import { createDekService } from "./services/dekService";
 import { createSecretService } from "./services/secretService";
@@ -132,6 +134,8 @@ export function createApp(deps: AppDeps) {
       )
       .use(environmentsRoutes({ db, auth, audit, secretStore }))
       .use(membersRoutes({ db, auth, audit }))
+      .use(tokensRoutes({ db, auth, audit }))
+      .use(auditRoutes({ db, auth, audit }))
       .use(secretsRoutes({ db, auth, audit, secretService }))
   );
 }

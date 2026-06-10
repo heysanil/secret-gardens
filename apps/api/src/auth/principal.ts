@@ -5,10 +5,11 @@ import {
   type InstanceRole,
   type Principal,
   type ProjectRole,
+  type ServiceTokenScope,
 } from "@safe/shared";
 import { Elysia } from "elysia";
 import type { Auth } from "./index";
-import { resolveProjectAccess } from "./projectGuard";
+import { resolveProjectAccess, type ServiceAccessSpec } from "./projectGuard";
 
 export interface PrincipalDeps {
   db: Database;
@@ -20,11 +21,21 @@ const LAST_USED_THROTTLE_MS = 60_000;
 
 const BEARER_RE = /^Bearer\s+(\S+)$/i;
 
-export type PrincipalErrorCode = "invalid_token" | "service_tokens_not_enabled";
+export type PrincipalErrorCode = "invalid_token";
+
+/**
+ * How the principal authenticated. Routes that must distinguish cookie
+ * sessions from Bearer PATs (e.g. the PAT-minted-token lifetime cap in
+ * /api/me/tokens) read this instead of re-deriving it from headers.
+ */
+export type AuthMethod =
+  | { kind: "session" }
+  | { kind: "pat"; tokenId: string; expiresAt: number | null }
+  | { kind: "service_token" };
 
 export type PrincipalResolution =
-  | { principal: Principal | null; errorCode: null }
-  | { principal: null; errorCode: PrincipalErrorCode };
+  | { principal: Principal; errorCode: null; method: AuthMethod }
+  | { principal: null; errorCode: PrincipalErrorCode | null; method: null };
 
 /**
  * Maps better-auth's free-form `user.role` string (possibly a comma-separated
@@ -44,24 +55,45 @@ function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+const INVALID: PrincipalResolution = {
+  principal: null,
+  errorCode: "invalid_token",
+  method: null,
+};
+
 interface UserTokenRow {
   id: string;
   user_id: string;
+  expires_at: number | null;
   last_used_at: number | null;
+}
+
+function touchLastUsed(
+  db: Database,
+  table: "user_tokens" | "service_tokens",
+  row: { id: string; last_used_at: number | null },
+  now: number,
+): void {
+  if (
+    row.last_used_at === null ||
+    row.last_used_at < now - LAST_USED_THROTTLE_MS
+  ) {
+    db.run(`UPDATE ${table} SET last_used_at = ? WHERE id = ?`, [now, row.id]);
+  }
 }
 
 function resolveUserToken(db: Database, token: string): PrincipalResolution {
   const now = Date.now();
   const row = db
     .query<UserTokenRow, [string, number]>(
-      `SELECT id, user_id, last_used_at FROM user_tokens
+      `SELECT id, user_id, expires_at, last_used_at FROM user_tokens
        WHERE token_hash = ?1
          AND revoked_at IS NULL
          AND (expires_at IS NULL OR expires_at > ?2)`,
     )
     .get(sha256Hex(token), now);
   if (row === null) {
-    return { principal: null, errorCode: "invalid_token" };
+    return INVALID;
   }
 
   const user = db
@@ -70,18 +102,10 @@ function resolveUserToken(db: Database, token: string): PrincipalResolution {
     )
     .get(row.user_id);
   if (user === null) {
-    return { principal: null, errorCode: "invalid_token" };
+    return INVALID;
   }
 
-  if (
-    row.last_used_at === null ||
-    row.last_used_at < now - LAST_USED_THROTTLE_MS
-  ) {
-    db.run("UPDATE user_tokens SET last_used_at = ? WHERE id = ?", [
-      now,
-      row.id,
-    ]);
-  }
+  touchLastUsed(db, "user_tokens", row, now);
 
   return {
     principal: {
@@ -90,14 +114,59 @@ function resolveUserToken(db: Database, token: string): PrincipalResolution {
       instanceRole: parseInstanceRole(user.role),
     },
     errorCode: null,
+    method: { kind: "pat", tokenId: row.id, expiresAt: row.expires_at },
+  };
+}
+
+interface ServiceTokenRow {
+  id: string;
+  project_id: string;
+  scope: ServiceTokenScope;
+  environment_ids: string | null;
+  last_used_at: number | null;
+}
+
+function resolveServiceToken(db: Database, token: string): PrincipalResolution {
+  const now = Date.now();
+  const row = db
+    .query<ServiceTokenRow, [string, number]>(
+      `SELECT id, project_id, scope, environment_ids, last_used_at
+       FROM service_tokens
+       WHERE token_hash = ?1
+         AND revoked_at IS NULL
+         AND (expires_at IS NULL OR expires_at > ?2)`,
+    )
+    .get(sha256Hex(token), now);
+  if (row === null) {
+    return INVALID;
+  }
+
+  touchLastUsed(db, "service_tokens", row, now);
+
+  return {
+    principal: {
+      type: "service",
+      tokenId: row.id,
+      projectId: row.project_id,
+      scope: row.scope,
+      // The column is written by the tokens route as a JSON string array
+      // (or NULL = all environments); a parse failure here is data
+      // corruption and must surface loudly, never widen access.
+      environmentIds:
+        row.environment_ids === null
+          ? null
+          : (JSON.parse(row.environment_ids) as string[]),
+    },
+    errorCode: null,
+    method: { kind: "service_token" },
   };
 }
 
 /**
  * Resolves the request's principal:
  *  1. `Authorization: Bearer safe_ut_…` → PAT lookup (sha256 hash).
- *     `safe_st_…` is rejected until Phase 6; any other Bearer value is
- *     invalid_token.
+ *     `Bearer safe_st_…` → service-token lookup (sha256 hash). Any other
+ *     Bearer value is invalid_token.
  *  2. Otherwise, better-auth cookie session.
  *  3. Neither → null principal (routes decide via guards).
  */
@@ -109,21 +178,21 @@ export async function resolvePrincipal(
   if (header !== null) {
     const token = BEARER_RE.exec(header)?.[1];
     if (token === undefined) {
-      return { principal: null, errorCode: "invalid_token" };
+      return INVALID;
     }
     switch (classifyToken(token)) {
       case "user":
         return resolveUserToken(deps.db, token);
       case "service":
-        return { principal: null, errorCode: "service_tokens_not_enabled" };
+        return resolveServiceToken(deps.db, token);
       default:
-        return { principal: null, errorCode: "invalid_token" };
+        return INVALID;
     }
   }
 
   const session = await deps.auth.api.getSession({ headers: request.headers });
   if (session === null) {
-    return { principal: null, errorCode: null };
+    return { principal: null, errorCode: null, method: null };
   }
   const role = (session.user as { role?: string | null }).role;
   return {
@@ -133,13 +202,14 @@ export async function resolvePrincipal(
       instanceRole: parseInstanceRole(role),
     },
     errorCode: null,
+    method: { kind: "session" },
   };
 }
 
 /**
  * Memoizes resolvePrincipal per Request object so stacked guards on one
  * route (e.g. requireAuth + requireInstanceAdmin) share a single resolution
- * — one session lookup / one PAT lookup per request, not one per guard.
+ * — one session lookup / one token lookup per request, not one per guard.
  */
 export function createPrincipalResolver(
   deps: PrincipalDeps,
@@ -156,15 +226,33 @@ export function createPrincipalResolver(
 }
 
 /**
+ * Effective project role of a service principal for RESPONSE SHAPING only
+ * (scope read → 'read', read_write → 'write'). Authorization for service
+ * principals is fully decided by serviceTokenAllows inside the guard —
+ * never feed this value into roleAllows for a service principal: it would
+ * grant role permissions (versions.read, audit.read, …) the token must not
+ * have.
+ */
+function serviceEffectiveRole(scope: ServiceTokenScope): ProjectRole {
+  return scope === "read_write" ? "write" : "read";
+}
+
+/**
  * Route guards as Elysia macros:
- *   { requireAuth: true }          → 401 unless a user principal resolves
+ *   { requireAuth: true }          → 401 unless a principal resolves; 403 for
+ *                                    service principals (no project context)
  *   { requireInstanceAdmin: true } → additionally 403 unless owner/admin
- *   { requireProject: minRole }    → project-scoped access on :projectId;
- *                                    exposes {project, principal, projectRole}
- * All expose a typed UserPrincipal to the handler and share one memoized
- * principal resolution per request. Service principals (Phase 6) never pass
- * these guards yet — requireProject will grow a service branch then;
- * user/member/token/admin routes stay user-only.
+ *   { requireProject: minRole }    → project-scoped access on :projectId for
+ *                                    USER principals only; service principals
+ *                                    get 403 on their own project, 404
+ *                                    elsewhere. Exposes {project, principal,
+ *                                    projectRole}.
+ *   { requireProjectAction: {minRole, serviceAction} }
+ *                                  → like requireProject for users, but also
+ *                                    admits service principals whose token
+ *                                    allows `serviceAction` (see
+ *                                    ServiceAccessSpec). Exposes a Principal.
+ * All guards share one memoized principal resolution per request.
  */
 export function principalPlugin(deps: PrincipalDeps) {
   const resolveOnce = createPrincipalResolver(deps);
@@ -181,7 +269,7 @@ export function principalPlugin(deps: PrincipalDeps) {
         if (res.principal.type !== "user") {
           return status(403, { error: "forbidden" });
         }
-        return { principal: res.principal };
+        return { principal: res.principal, authMethod: res.method };
       },
     },
     requireInstanceAdmin: {
@@ -214,9 +302,39 @@ export function principalPlugin(deps: PrincipalDeps) {
         switch (access.kind) {
           case "unauthorized":
             return status(401, { error: access.error });
-          case "service_unsupported":
-            // PHASE 6 seam — see resolveProjectAccess.
-            return status(401, { error: "service_tokens_not_enabled" });
+          case "not_found":
+            return status(404, { error: "not_found" });
+          case "forbidden":
+            return status(403, { error: "forbidden" });
+          case "ok_service":
+            // Unreachable: without a ServiceAccessSpec the guard resolves
+            // service principals to forbidden/not_found. Kept exhaustive.
+            return status(403, { error: "forbidden" });
+          case "ok":
+            return {
+              project: access.project,
+              principal: access.principal,
+              projectRole: access.projectRole,
+            };
+        }
+      },
+    }),
+    requireProjectAction: (opts: {
+      minRole: ProjectRole;
+      serviceAction: ServiceAccessSpec["action"];
+    }) => ({
+      async resolve({ request, params, status }) {
+        const routeParams = params as Record<string, string | undefined>;
+        const access = resolveProjectAccess(
+          deps.db,
+          await resolveOnce(request),
+          routeParams.projectId,
+          opts.minRole,
+          { action: opts.serviceAction, envId: routeParams.envId },
+        );
+        switch (access.kind) {
+          case "unauthorized":
+            return status(401, { error: access.error });
           case "not_found":
             return status(404, { error: "not_found" });
           case "forbidden":
@@ -224,8 +342,14 @@ export function principalPlugin(deps: PrincipalDeps) {
           case "ok":
             return {
               project: access.project,
-              principal: access.principal,
+              principal: access.principal as Principal,
               projectRole: access.projectRole,
+            };
+          case "ok_service":
+            return {
+              project: access.project,
+              principal: access.principal as Principal,
+              projectRole: serviceEffectiveRole(access.principal.scope),
             };
         }
       },

@@ -53,6 +53,7 @@ describe("runMigrations", () => {
     expect(rows.map((r) => r.name)).toEqual([
       "001_init",
       "002_membership_created_at",
+      "003_user_token_created_via",
     ]);
     expect(rows[0]?.applied_at).toBeGreaterThan(0);
     db.close();
@@ -87,6 +88,26 @@ describe("runMigrations", () => {
       .query<{ id: string }, []>("SELECT id FROM environments")
       .get();
     expect(env).toBeNull();
+    db.close();
+  });
+
+  test("user_tokens.created_via defaults to 'session' and rejects unknown values", () => {
+    const db = openDb(":memory:");
+    runMigrations(db);
+    db.run(
+      "INSERT INTO user_tokens (id, user_id, name, token_hash, token_prefix, created_at) VALUES ('ut_a', 'usr_x', 't', 'h1', 'p', 1)",
+    );
+    const row = db
+      .query<{ created_via: string }, []>(
+        "SELECT created_via FROM user_tokens WHERE id = 'ut_a'",
+      )
+      .get();
+    expect(row?.created_via).toBe("session");
+    expect(() =>
+      db.run(
+        "INSERT INTO user_tokens (id, user_id, name, token_hash, token_prefix, created_at, created_via) VALUES ('ut_b', 'usr_x', 't', 'h2', 'p', 1, 'magic')",
+      ),
+    ).toThrow();
     db.close();
   });
 

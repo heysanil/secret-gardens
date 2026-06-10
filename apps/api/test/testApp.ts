@@ -83,16 +83,19 @@ export async function signIn(
   return { res, cookie: cookieHeader(res) };
 }
 
-/** JSON request against app.handle with an optional session cookie. */
+/** JSON request against app.handle with an optional session cookie / Bearer token. */
 export async function api(
   app: App,
   method: string,
   path: string,
-  opts: { cookie?: string; body?: unknown } = {},
+  opts: { cookie?: string; bearer?: string; body?: unknown } = {},
 ): Promise<Response> {
   const headers: Record<string, string> = {};
   if (opts.cookie !== undefined) {
     headers.cookie = opts.cookie;
+  }
+  if (opts.bearer !== undefined) {
+    headers.authorization = `Bearer ${opts.bearer}`;
   }
   let body: string | undefined;
   if (opts.body !== undefined) {

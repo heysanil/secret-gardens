@@ -15,6 +15,13 @@ export interface MeDeps {
 const DAY_MS = 86_400_000;
 /** Display prefix stored alongside the hash: `safe_ut_` + 4 chars. */
 const TOKEN_DISPLAY_PREFIX_LEN = 12;
+/**
+ * Server-side lifetime cap for PAT-minted PATs: min(30 days, the creating
+ * token's own remaining lifetime). Stops a leaked/short-lived CLI token from
+ * minting longer-lived (or immortal) successors. Cookie sessions are
+ * uncapped (up to the schema's 365-day maximum).
+ */
+const PAT_MINTED_MAX_MS = 30 * DAY_MS;
 
 interface UserTokenListRow {
   id: string;
@@ -59,20 +66,28 @@ export function meRoutes(deps: MeDeps) {
     )
     .post(
       "/api/me/tokens",
-      async ({ principal, body, set }) => {
+      async ({ principal, authMethod, body, set }) => {
         const token =
           TOKEN_PREFIXES.userToken + randomBytes(32).toString("base64url");
         const tokenPrefix = token.slice(0, TOKEN_DISPLAY_PREFIX_LEN);
         const id = newId("ut");
         const now = Date.now();
-        const expiresAt =
+        let expiresAt =
           body.expiresInDays === undefined
             ? null
             : now + body.expiresInDays * DAY_MS;
+        const createdViaPat = authMethod.kind === "pat";
+        if (authMethod.kind === "pat") {
+          const cap =
+            authMethod.expiresAt === null
+              ? now + PAT_MINTED_MAX_MS
+              : Math.min(now + PAT_MINTED_MAX_MS, authMethod.expiresAt);
+          expiresAt = expiresAt === null ? cap : Math.min(expiresAt, cap);
+        }
         db.run(
           `INSERT INTO user_tokens
-             (id, user_id, name, token_hash, token_prefix, expires_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+             (id, user_id, name, token_hash, token_prefix, expires_at, created_at, created_via)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             id,
             principal.userId,
@@ -81,6 +96,7 @@ export function meRoutes(deps: MeDeps) {
             tokenPrefix,
             expiresAt,
             now,
+            createdViaPat ? "token" : "session",
           ],
         );
         await audit.appendAudit("instance", {

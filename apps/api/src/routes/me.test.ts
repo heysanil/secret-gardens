@@ -350,13 +350,132 @@ describe("personal access tokens", () => {
     ctx.close();
   });
 
-  test("service token prefix → 401 service_tokens_not_enabled", async () => {
+  test("unknown service token → 401 invalid_token", async () => {
     const ctx = await createTestApp(redis);
     const res = await get(ctx, "/api/me", {
       authorization: `Bearer ${TOKEN_PREFIXES.serviceToken}sometoken`,
     });
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: "service_tokens_not_enabled" });
+    expect(await res.json()).toEqual({ error: "invalid_token" });
+    ctx.close();
+  });
+});
+
+describe("PAT-minted token lifetime cap", () => {
+  const DAY_MS = 86_400_000;
+
+  function createdViaOf(ctx: TestApp, id: string): string | null {
+    return (
+      ctx.db
+        .query<{ created_via: string }, [string]>(
+          "SELECT created_via FROM user_tokens WHERE id = ?",
+        )
+        .get(id)?.created_via ?? null
+    );
+  }
+
+  function createTokenViaBearer(
+    ctx: TestApp,
+    bearer: string,
+    body: Record<string, unknown>,
+  ) {
+    return ctx.app.handle(
+      new Request("http://localhost/api/me/tokens", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${bearer}`,
+        },
+        body: JSON.stringify(body),
+      }),
+    );
+  }
+
+  test("session-created tokens stay uncapped with created_via 'session'", async () => {
+    const ctx = await createTestApp(redis);
+    const { cookie } = await setupOwner(ctx);
+    const res = await createToken(ctx, cookie, { name: "unlimited" });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { id: string; expiresAt: number | null };
+    expect(body.expiresAt).toBeNull();
+    expect(createdViaOf(ctx, body.id)).toBe("session");
+
+    // The 365-day maximum still applies verbatim.
+    const yearly = await createToken(ctx, cookie, {
+      name: "year",
+      expiresInDays: 365,
+    });
+    const yearlyBody = (await yearly.json()) as { expiresAt: number };
+    expect(yearlyBody.expiresAt).toBeGreaterThan(Date.now() + 364 * DAY_MS);
+    ctx.close();
+  });
+
+  test("PAT-created token with no expiry requested → 30-day cap applied", async () => {
+    const ctx = await createTestApp(redis);
+    const { cookie } = await setupOwner(ctx);
+    const parent = (await (
+      await createToken(ctx, cookie, { name: "immortal parent" })
+    ).json()) as { token: string };
+
+    const before = Date.now();
+    const res = await createTokenViaBearer(ctx, parent.token, {
+      name: "child",
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { id: string; expiresAt: number };
+    expect(body.expiresAt).toBeGreaterThanOrEqual(before + 30 * DAY_MS);
+    expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + 30 * DAY_MS);
+    expect(createdViaOf(ctx, body.id)).toBe("token");
+
+    // The response matches what was actually stored.
+    const stored = ctx.db
+      .query<{ expires_at: number | null }, [string]>(
+        "SELECT expires_at FROM user_tokens WHERE id = ?",
+      )
+      .get(body.id);
+    expect(stored?.expires_at).toBe(body.expiresAt);
+    ctx.close();
+  });
+
+  test("PAT with 15 days left capping a 365-day request to its own expiry", async () => {
+    const ctx = await createTestApp(redis);
+    const { cookie } = await setupOwner(ctx);
+    const parent = (await (
+      await createToken(ctx, cookie, { name: "parent", expiresInDays: 30 })
+    ).json()) as { id: string; token: string };
+    // Shrink the parent's remaining lifetime to ~15 days.
+    const parentExpiresAt = Date.now() + 15 * DAY_MS;
+    ctx.db.run("UPDATE user_tokens SET expires_at = ? WHERE id = ?", [
+      parentExpiresAt,
+      parent.id,
+    ]);
+
+    const res = await createTokenViaBearer(ctx, parent.token, {
+      name: "child",
+      expiresInDays: 365,
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { id: string; expiresAt: number };
+    expect(body.expiresAt).toBe(parentExpiresAt);
+    expect(createdViaOf(ctx, body.id)).toBe("token");
+    ctx.close();
+  });
+
+  test("PAT-created request below the cap is honored as-is", async () => {
+    const ctx = await createTestApp(redis);
+    const { cookie } = await setupOwner(ctx);
+    const parent = (await (
+      await createToken(ctx, cookie, { name: "parent" })
+    ).json()) as { token: string };
+
+    const before = Date.now();
+    const res = await createTokenViaBearer(ctx, parent.token, {
+      name: "short child",
+      expiresInDays: 7,
+    });
+    const body = (await res.json()) as { expiresAt: number };
+    expect(body.expiresAt).toBeGreaterThanOrEqual(before + 7 * DAY_MS);
+    expect(body.expiresAt).toBeLessThanOrEqual(Date.now() + 7 * DAY_MS);
     ctx.close();
   });
 });

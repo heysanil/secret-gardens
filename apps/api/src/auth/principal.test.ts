@@ -56,6 +56,47 @@ function insertToken(
   return token;
 }
 
+/** Inserts a project + service token row directly; returns both. */
+function insertServiceToken(
+  ctx: TestApp,
+  overrides: {
+    scope?: "read" | "read_write";
+    environmentIds?: string[] | null;
+    expiresAt?: number | null;
+    revokedAt?: number | null;
+  } = {},
+): { token: string; tokenId: string; projectId: string } {
+  const projectId = newId("prj");
+  ctx.db.run(
+    "INSERT INTO projects (id, name, slug, created_by, created_at, updated_at) VALUES (?, 'P', ?, 'usr_c', 1, 1)",
+    [projectId, projectId],
+  );
+  const token =
+    TOKEN_PREFIXES.serviceToken + randomBytes(32).toString("base64url");
+  const tokenId = newId("st");
+  ctx.db.run(
+    `INSERT INTO service_tokens
+       (id, project_id, name, token_hash, token_prefix, scope, environment_ids,
+        expires_at, revoked_at, created_by, created_at)
+     VALUES (?, ?, 'ci', ?, ?, ?, ?, ?, ?, 'usr_c', ?)`,
+    [
+      tokenId,
+      projectId,
+      createHash("sha256").update(token).digest("hex"),
+      token.slice(0, 12),
+      overrides.scope ?? "read",
+      overrides.environmentIds === undefined ||
+      overrides.environmentIds === null
+        ? null
+        : JSON.stringify(overrides.environmentIds),
+      overrides.expiresAt ?? null,
+      overrides.revokedAt ?? null,
+      Date.now(),
+    ],
+  );
+  return { token, tokenId, projectId };
+}
+
 function ownerUserId(ctx: TestApp): string {
   const row = ctx.db
     .query<{ id: string }, []>("SELECT id FROM \"user\" WHERE role = 'owner'")
@@ -87,7 +128,7 @@ describe("resolvePrincipal", () => {
       ctx,
       new Request("http://localhost/api/me"),
     );
-    expect(res).toEqual({ principal: null, errorCode: null });
+    expect(res).toEqual({ principal: null, errorCode: null, method: null });
     ctx.close();
   });
 
@@ -99,14 +140,93 @@ describe("resolvePrincipal", () => {
     ctx.close();
   });
 
-  test("service token prefix → service_tokens_not_enabled (Phase 6)", async () => {
+  test("unknown service token → invalid_token", async () => {
     const ctx = await createTestApp(redis);
     const res = await resolvePrincipal(
       ctx,
-      bearerRequest(`${TOKEN_PREFIXES.serviceToken}whatever`),
+      bearerRequest(
+        TOKEN_PREFIXES.serviceToken + randomBytes(32).toString("base64url"),
+      ),
     );
     expect(res.principal).toBeNull();
-    expect(res.errorCode).toBe("service_tokens_not_enabled");
+    expect(res.errorCode).toBe("invalid_token");
+    ctx.close();
+  });
+
+  test("valid service token → service principal with parsed environment ids", async () => {
+    const ctx = await createTestApp(redis);
+    const { token, tokenId, projectId } = insertServiceToken(ctx, {
+      scope: "read_write",
+      environmentIds: ["env_a", "env_b"],
+    });
+    const res = await resolvePrincipal(ctx, bearerRequest(token));
+    expect(res.errorCode).toBeNull();
+    expect(res.principal).toEqual({
+      type: "service",
+      tokenId,
+      projectId,
+      scope: "read_write",
+      environmentIds: ["env_a", "env_b"],
+    });
+    expect(res.method).toEqual({ kind: "service_token" });
+    ctx.close();
+  });
+
+  test("service token with NULL environment_ids → environmentIds null (all envs)", async () => {
+    const ctx = await createTestApp(redis);
+    const { token } = insertServiceToken(ctx, { environmentIds: null });
+    const res = await resolvePrincipal(ctx, bearerRequest(token));
+    expect(res.principal?.type).toBe("service");
+    if (res.principal?.type === "service") {
+      expect(res.principal.environmentIds).toBeNull();
+    }
+    ctx.close();
+  });
+
+  test("revoked service token → invalid_token", async () => {
+    const ctx = await createTestApp(redis);
+    const { token } = insertServiceToken(ctx, { revokedAt: Date.now() });
+    const res = await resolvePrincipal(ctx, bearerRequest(token));
+    expect(res.errorCode).toBe("invalid_token");
+    ctx.close();
+  });
+
+  test("expired service token → invalid_token", async () => {
+    const ctx = await createTestApp(redis);
+    const { token } = insertServiceToken(ctx, {
+      expiresAt: Date.now() - 1000,
+    });
+    const res = await resolvePrincipal(ctx, bearerRequest(token));
+    expect(res.errorCode).toBe("invalid_token");
+    ctx.close();
+  });
+
+  test("service token use sets last_used_at, throttled to once per 60s", async () => {
+    const ctx = await createTestApp(redis);
+    const { token, tokenId } = insertServiceToken(ctx);
+    const lastUsed = () =>
+      ctx.db
+        .query<{ last_used_at: number | null }, [string]>(
+          "SELECT last_used_at FROM service_tokens WHERE id = ?",
+        )
+        .get(tokenId)?.last_used_at ?? null;
+
+    expect(lastUsed()).toBeNull();
+    await resolvePrincipal(ctx, bearerRequest(token));
+    const first = lastUsed();
+    expect(first).not.toBeNull();
+
+    // A second use within the throttle window leaves last_used_at unchanged.
+    await resolvePrincipal(ctx, bearerRequest(token));
+    expect(lastUsed()).toBe(first);
+
+    // Once the stored value is older than the window, it is refreshed.
+    ctx.db.run("UPDATE service_tokens SET last_used_at = ? WHERE id = ?", [
+      Date.now() - 61_000,
+      tokenId,
+    ]);
+    await resolvePrincipal(ctx, bearerRequest(token));
+    expect(lastUsed()).toBeGreaterThan(Date.now() - 5_000);
     ctx.close();
   });
 

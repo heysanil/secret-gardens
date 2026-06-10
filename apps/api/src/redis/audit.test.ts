@@ -7,7 +7,7 @@ import {
   createAuditLog,
   normalizeStreamEntries,
 } from "./audit";
-import { createRedis } from "./client";
+import { createRedis, type RedisLike } from "./client";
 
 const redis = createRedis(TEST_REDIS_URL);
 
@@ -276,5 +276,106 @@ describe("audit log", () => {
         fields: { action: "spoofed" },
       }),
     ).rejects.toThrow(/reserved/);
+  });
+});
+
+describe("readAudit fetch-batch growth", () => {
+  /**
+   * Simulates a stream of `total` entries (ids `1-0` … `total-0`, oldest
+   * first) where `actionOf(seq)` names each entry's action, answering
+   * XREVRANGE like Redis would. Counts the round trips.
+   */
+  function streamStub(
+    total: number,
+    actionOf: (seq: number) => string,
+  ): { redis: RedisLike; sends: () => number } {
+    let sendCount = 0;
+    const redisStub: RedisLike = {
+      connect: async () => {},
+      close: () => {},
+      hget: async () => null,
+      hgetall: async () => ({}),
+      hkeys: async () => [],
+      send: async (command, args) => {
+        if (command !== "XREVRANGE") {
+          throw new Error(`unexpected command ${command}`);
+        }
+        sendCount++;
+        const end = args[1] as string;
+        const count = Number(args[4]);
+        // end is "+" (from the newest) or "(<id>" (exclusive cursor).
+        const maxSeq =
+          end === "+" ? total : Number(end.slice(1).split("-")[0]) - 1;
+        const out: Array<[string, string[]]> = [];
+        for (let seq = maxSeq; seq >= 1 && out.length < count; seq--) {
+          out.push([
+            `${seq}-0`,
+            ["action", actionOf(seq), "actorType", "user", "actorId", "u"],
+          ]);
+        }
+        return out;
+      },
+    };
+    return { redis: redisStub, sends: () => sendCount };
+  }
+
+  test("a filter matching only the oldest of 5000 entries costs O(log n) round trips", async () => {
+    const TOTAL = 5000;
+    const { redis: stub, sends } = streamStub(TOTAL, (seq) =>
+      seq === 1 ? "secret.delete" : "secret.update",
+    );
+    const filtered = createAuditLog(stub);
+    const page = await filtered.readAudit(
+      { projectId: "prj_growth" },
+      { action: "secret.delete", limit: 1 },
+    );
+
+    expect(page.entries).toHaveLength(1);
+    expect(page.entries[0]?.id).toBe("1-0");
+
+    // Fixed 32-entry batches would need ceil(5000/32) ≈ 157 round trips.
+    // Doubling from 32 up to the 1024 cap reaches entry 1-0 in 9
+    // (32+64+128+256+512+1024 = 2016, then 1024-sized pages).
+    const FIXED_BATCH_CALLS = Math.ceil(TOTAL / 32);
+    expect(sends()).toBeLessThanOrEqual(10);
+    expect(sends()).toBeLessThan(FIXED_BATCH_CALLS / 4);
+  });
+
+  test("growth resets nothing when matches appear — pages stay correct", async () => {
+    // Every 100th entry matches: the batch grows while whole batches miss,
+    // and every match is still returned exactly once across pages.
+    const TOTAL = 1000;
+    const { redis: stub } = streamStub(TOTAL, (seq) =>
+      seq % 100 === 0 ? "secret.delete" : "secret.update",
+    );
+    const filtered = createAuditLog(stub);
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = await filtered.readAudit(
+        { projectId: "prj_growth" },
+        {
+          action: "secret.delete",
+          limit: 3,
+          ...(cursor === null ? {} : { cursor }),
+        },
+      );
+      seen.push(...page.entries.map((e) => e.id));
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+
+    expect(seen).toEqual([
+      "1000-0",
+      "900-0",
+      "800-0",
+      "700-0",
+      "600-0",
+      "500-0",
+      "400-0",
+      "300-0",
+      "200-0",
+      "100-0",
+    ]);
   });
 });
