@@ -50,7 +50,10 @@ describe("runMigrations", () => {
         "SELECT name, applied_at FROM _migrations ORDER BY name",
       )
       .all();
-    expect(rows.map((r) => r.name)).toEqual(["001_init"]);
+    expect(rows.map((r) => r.name)).toEqual([
+      "001_init",
+      "002_membership_created_at",
+    ]);
     expect(rows[0]?.applied_at).toBeGreaterThan(0);
     db.close();
   });

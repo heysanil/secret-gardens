@@ -1,8 +1,14 @@
 import type { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
-import { classifyToken, type InstanceRole, type Principal } from "@safe/shared";
+import {
+  classifyToken,
+  type InstanceRole,
+  type Principal,
+  type ProjectRole,
+} from "@safe/shared";
 import { Elysia } from "elysia";
 import type { Auth } from "./index";
+import { resolveProjectAccess } from "./projectGuard";
 
 export interface PrincipalDeps {
   db: Database;
@@ -153,9 +159,11 @@ export function createPrincipalResolver(
  * Route guards as Elysia macros:
  *   { requireAuth: true }          → 401 unless a user principal resolves
  *   { requireInstanceAdmin: true } → additionally 403 unless owner/admin
- * Both expose a typed UserPrincipal to the handler and share one memoized
+ *   { requireProject: minRole }    → project-scoped access on :projectId;
+ *                                    exposes {project, principal, projectRole}
+ * All expose a typed UserPrincipal to the handler and share one memoized
  * principal resolution per request. Service principals (Phase 6) never pass
- * these guards — secrets routes will get their own project-scoped guard;
+ * these guards yet — requireProject will grow a service branch then;
  * user/member/token/admin routes stay user-only.
  */
 export function principalPlugin(deps: PrincipalDeps) {
@@ -195,5 +203,32 @@ export function principalPlugin(deps: PrincipalDeps) {
         return { principal: res.principal };
       },
     },
+    requireProject: (minRole: ProjectRole) => ({
+      async resolve({ request, params, status }) {
+        const access = resolveProjectAccess(
+          deps.db,
+          await resolveOnce(request),
+          (params as Record<string, string | undefined>).projectId,
+          minRole,
+        );
+        switch (access.kind) {
+          case "unauthorized":
+            return status(401, { error: access.error });
+          case "service_unsupported":
+            // PHASE 6 seam — see resolveProjectAccess.
+            return status(401, { error: "service_tokens_not_enabled" });
+          case "not_found":
+            return status(404, { error: "not_found" });
+          case "forbidden":
+            return status(403, { error: "forbidden" });
+          case "ok":
+            return {
+              project: access.project,
+              principal: access.principal,
+              projectRole: access.projectRole,
+            };
+        }
+      },
+    }),
   });
 }

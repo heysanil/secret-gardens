@@ -89,6 +89,15 @@ CREATE TABLE instance_settings (
 );
 `;
 
+/**
+ * Membership creation timestamp for the members listing. DEFAULT 0 only
+ * satisfies the constraint for any pre-existing rows; the API always writes
+ * an explicit value.
+ */
+const MIGRATION_002_MEMBERSHIP_CREATED_AT = `
+ALTER TABLE project_memberships ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0;
+`;
+
 export interface Migration {
   name: string;
   sql: string;
@@ -97,4 +106,8 @@ export interface Migration {
 /** Ordered list — append-only; never edit an applied migration. */
 export const MIGRATIONS: readonly Migration[] = [
   { name: "001_init", sql: MIGRATION_001_INIT },
+  {
+    name: "002_membership_created_at",
+    sql: MIGRATION_002_MEMBERSHIP_CREATED_AT,
+  },
 ];
