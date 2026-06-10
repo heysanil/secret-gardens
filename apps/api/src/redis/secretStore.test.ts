@@ -245,6 +245,51 @@ describe("secretStore", () => {
     expect((await store.getCurrent(pid, eid, "R"))?.ct).toBe(p1.ct);
   });
 
+  test("rewriteCurrent swaps ciphertext in place without touching version state", async () => {
+    const pid = newId("prj");
+    const eid = newId("env");
+    const key = "ROTATED";
+    await store.writeSecret(pid, eid, key, payload("old"), actor, "create");
+    const before = await store.getCurrent(pid, eid, key);
+
+    const next: SecretCipherPayload = { ...payload("new"), dekV: 2 };
+    expect(await store.rewriteCurrent(pid, eid, key, next)).toBe(true);
+
+    const after = await store.getCurrent(pid, eid, key);
+    expect(after?.ct).toBe(next.ct);
+    expect(after?.nonce).toBe(next.nonce);
+    expect(after?.tag).toBe(next.tag);
+    expect(after?.dekV).toBe(2);
+    expect(after?.alg).toBe(next.alg);
+    // Version pointer and update metadata are preserved verbatim.
+    expect(after?.v).toBe(before?.v as number);
+    expect(after?.updatedAt).toBe(before?.updatedAt as number);
+    expect(after?.updatedBy).toBe(before?.updatedBy as string);
+
+    // No new version, no counter bump.
+    const versions = await store.listVersions(pid, eid, key);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]?.version).toBe(1);
+    const counter = await redis.send("GET", [
+      `secretvctr:${pid}:${eid}:${key}`,
+    ]);
+    expect(String(counter)).toBe("1");
+    // The historical version still holds the original ciphertext.
+    expect((await store.getVersion(pid, eid, key, 1))?.ct).toBe(
+      payload("old").ct,
+    );
+  });
+
+  test("rewriteCurrent returns false for an absent key and writes nothing", async () => {
+    const pid = newId("prj");
+    const eid = newId("env");
+    expect(await store.rewriteCurrent(pid, eid, "MISSING", payload("x"))).toBe(
+      false,
+    );
+    expect(await scanCount(redis, `secrets:${pid}:${eid}`)).toBe(0);
+    expect(await scanCount(redis, `secretver:${pid}:${eid}:*`)).toBe(0);
+  });
+
   test("deleteEnvironmentData removes only that environment's keys", async () => {
     const pid = newId("prj");
     const env1 = newId("env");

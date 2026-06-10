@@ -105,6 +105,29 @@ redis.call('HDEL', KEYS[3], ARGV[1])
 return v
 `;
 
+/**
+ * KEYS = [current hash]
+ * ARGV = [secret key (field), cipher payload JSON]
+ * Replaces ONLY the ciphertext fields of the current record, preserving
+ * `v`/`updatedAt`/`updatedBy` — no version append, no counter touch.
+ * Returns 0 (→ false) when the key has no current value.
+ */
+const REWRITE_CURRENT_SCRIPT = `
+local raw = redis.call('HGET', KEYS[1], ARGV[1])
+if not raw then
+  return 0
+end
+local cur = cjson.decode(raw)
+local p = cjson.decode(ARGV[2])
+cur.ct = p.ct
+cur.nonce = p.nonce
+cur.tag = p.tag
+cur.dekV = p.dekV
+cur.alg = p.alg
+redis.call('HSET', KEYS[1], ARGV[1], cjson.encode(cur))
+return 1
+`;
+
 const SCAN_BATCH = "1000";
 const UNLINK_BATCH = 500;
 
@@ -124,6 +147,19 @@ export interface SecretStore {
     key: string,
     actor: SecretActor,
   ): Promise<number | null>;
+  /**
+   * In-place ciphertext replacement of the CURRENT record only — same `v`,
+   * same `updatedAt`/`updatedBy`, no version-history append. Used ONLY by
+   * DEK rotation, which re-encrypts existing plaintext under a new DEK;
+   * anything that changes the plaintext must go through writeSecret.
+   * Returns false when the key has no current value.
+   */
+  rewriteCurrent(
+    projectId: string,
+    envId: string,
+    key: string,
+    payload: SecretCipherPayload,
+  ): Promise<boolean>;
   getCurrent(
     projectId: string,
     envId: string,
@@ -249,6 +285,22 @@ export function createSecretStore(redis: RedisLike): SecretStore {
         JSON.stringify(tombstone),
       ]);
       return version === 0 ? null : version;
+    },
+
+    async rewriteCurrent(projectId, envId, key, payload) {
+      const result = await redis.send("EVAL", [
+        REWRITE_CURRENT_SCRIPT,
+        "1",
+        secretsKey(projectId, envId),
+        key,
+        JSON.stringify(payload),
+      ]);
+      if (typeof result !== "number") {
+        throw new Error(
+          `secretStore script returned unexpected reply type: ${typeof result}`,
+        );
+      }
+      return result === 1;
     },
 
     async getCurrent(projectId, envId, key) {
