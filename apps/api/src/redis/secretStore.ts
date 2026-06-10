@@ -68,6 +68,12 @@ export interface SecretVersionMeta {
   hasValue: boolean;
 }
 
+/** A version number paired with its full stored record. */
+export interface VersionRecord {
+  version: number;
+  record: SecretVersion;
+}
+
 const secretsKey = (projectId: string, envId: string) =>
   `secrets:${projectId}:${envId}`;
 const versionsKey = (projectId: string, envId: string, key: string) =>
@@ -170,11 +176,22 @@ export interface SecretStore {
     envId: string,
   ): Promise<Record<string, CurrentSecret>>;
   listKeys(projectId: string, envId: string): Promise<string[]>;
+  /** Metadata-only view over listVersionRecords (same single HGETALL). */
   listVersions(
     projectId: string,
     envId: string,
     key: string,
   ): Promise<SecretVersionMeta[]>;
+  /**
+   * Every version's full record (ciphertext included) from ONE HGETALL,
+   * newest first — the include_values read path consumes this instead of
+   * re-fetching versions one by one.
+   */
+  listVersionRecords(
+    projectId: string,
+    envId: string,
+    key: string,
+  ): Promise<VersionRecord[]>;
   getVersion(
     projectId: string,
     envId: string,
@@ -240,6 +257,22 @@ export function createSecretStore(redis: RedisLike): SecretStore {
     for (const pattern of patterns) {
       await unlinkAll(await scanKeys(pattern));
     }
+  }
+
+  async function listVersionRecords(
+    projectId: string,
+    envId: string,
+    key: string,
+  ): Promise<VersionRecord[]> {
+    const raw = (await redis.hgetall(versionsKey(projectId, envId, key))) ?? {};
+    const records: VersionRecord[] = Object.entries(raw).map(
+      ([field, value]) => ({
+        version: Number(field),
+        record: JSON.parse(value) as SecretVersion,
+      }),
+    );
+    records.sort((a, b) => b.version - a.version);
+    return records;
   }
 
   return {
@@ -321,14 +354,13 @@ export function createSecretStore(redis: RedisLike): SecretStore {
       return (await redis.hkeys(secretsKey(projectId, envId))) ?? [];
     },
 
+    listVersionRecords,
+
     async listVersions(projectId, envId, key) {
-      const raw =
-        (await redis.hgetall(versionsKey(projectId, envId, key))) ?? {};
-      const metas: SecretVersionMeta[] = [];
-      for (const [field, value] of Object.entries(raw)) {
-        const record = JSON.parse(value) as SecretVersion;
+      const records = await listVersionRecords(projectId, envId, key);
+      return records.map(({ version, record }) => {
         const meta: SecretVersionMeta = {
-          version: Number(field),
+          version,
           op: record.op,
           actorType: record.actorType,
           actorId: record.actorId,
@@ -338,10 +370,8 @@ export function createSecretStore(redis: RedisLike): SecretStore {
         if (record.rollbackOf !== undefined) {
           meta.rollbackOf = record.rollbackOf;
         }
-        metas.push(meta);
-      }
-      metas.sort((a, b) => b.version - a.version);
-      return metas;
+        return meta;
+      });
     },
 
     async getVersion(projectId, envId, key, version) {

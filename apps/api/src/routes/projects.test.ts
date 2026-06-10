@@ -1,4 +1,6 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { Database } from "bun:sqlite";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { Elysia } from "elysia";
 import {
   api,
   createMemberUser,
@@ -8,7 +10,10 @@ import {
 } from "../../test/testApp";
 import { TEST_REDIS_URL } from "../../test/testRedis";
 import { createRedis, type RedisLike } from "../redis/client";
-import { deriveProjectSlug } from "./projects";
+import { createSecretStore } from "../redis/secretStore";
+import { createDekService, type DekService } from "../services/dekService";
+import { createSecretService } from "../services/secretService";
+import { deriveProjectSlug, projectsRoutes } from "./projects";
 
 const redis = createRedis(TEST_REDIS_URL);
 
@@ -482,6 +487,130 @@ describe("POST /api/projects/:projectId/rotate-dek", () => {
     const newRaw = await redis.hget(`secrets:${project.id}:${dev.id}`, "NEW");
     expect((JSON.parse(newRaw as string) as { dekV: number }).dekV).toBe(2);
 
+    ctx.close();
+  });
+});
+
+describe("POST /api/projects DEK creation failure", () => {
+  /**
+   * Builds a parallel app over the same db/auth/audit as `ctx`, but with a
+   * dekService whose createProjectDek always throws, and captures whatever
+   * error reaches Elysia's error hook.
+   */
+  function buildFailingApp(ctx: TestApp, db: Database) {
+    const secretStore = createSecretStore(redis);
+    const realDek = createDekService({
+      db: ctx.db,
+      masterKey: ctx.config.masterKey,
+    });
+    const dekService: DekService = {
+      ...realDek,
+      createProjectDek: () => {
+        throw new Error("dek wrap failed (test)");
+      },
+    };
+    const secretService = createSecretService({ dekService, secretStore });
+    const captured: { error: unknown } = { error: undefined };
+    const app = new Elysia()
+      .onError(({ error }) => {
+        captured.error = error;
+      })
+      .use(
+        projectsRoutes({
+          db,
+          auth: ctx.auth,
+          audit: ctx.audit,
+          redis,
+          dekService,
+          secretService,
+          secretStore,
+        }),
+      );
+    return { app, captured };
+  }
+
+  test("deletes the project row, returns 500, and surfaces the DEK error", async () => {
+    const ctx = await createTestApp(redis);
+    const owner = await signUpUser(ctx.app, "owner");
+    const { app, captured } = buildFailingApp(ctx, ctx.db);
+
+    const res = await app.handle(
+      new Request("http://localhost/api/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie: owner.cookie },
+        body: JSON.stringify({ name: "Doomed", slug: "doomed" }),
+      }),
+    );
+    expect(res.status).toBe(500);
+    expect((captured.error as Error).message).toBe("dek wrap failed (test)");
+
+    // Compensating delete removed the row (and, via cascade, envs/membership).
+    expect(
+      ctx.db.query("SELECT id FROM projects WHERE slug = 'doomed'").get(),
+    ).toBeNull();
+    expect(
+      ctx.db
+        .query<{ n: number }, []>(
+          "SELECT COUNT(*) AS n FROM environments e JOIN projects p ON p.id = e.project_id WHERE p.slug = 'doomed'",
+        )
+        .get()?.n,
+    ).toBe(0);
+    ctx.close();
+  });
+
+  test("a failing compensating delete is logged and does not mask the DEK error", async () => {
+    const ctx = await createTestApp(redis);
+    const owner = await signUpUser(ctx.app, "owner");
+
+    // Proxy the db so ONLY the compensating delete throws.
+    const failingDb = new Proxy(ctx.db, {
+      get(target, prop) {
+        if (prop === "run") {
+          return (sql: string, params?: unknown[]) => {
+            if (sql.startsWith("DELETE FROM projects")) {
+              throw new Error("cleanup failed (test)");
+            }
+            return target.run(sql, params as never);
+          };
+        }
+        const value = Reflect.get(target, prop);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }) as Database;
+
+    const { app, captured } = buildFailingApp(ctx, failingDb);
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await app.handle(
+        new Request("http://localhost/api/projects", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: owner.cookie,
+          },
+          body: JSON.stringify({ name: "Orphan", slug: "orphan" }),
+        }),
+      );
+      expect(res.status).toBe(500);
+      // The ORIGINAL DEK error surfaces — not the cleanup error.
+      expect((captured.error as Error).message).toBe("dek wrap failed (test)");
+
+      // The cleanup failure was logged with the orphaned project id.
+      const orphan = ctx.db
+        .query<{ id: string }, []>(
+          "SELECT id FROM projects WHERE slug = 'orphan'",
+        )
+        .get();
+      expect(orphan).not.toBeNull();
+      const logged = errorSpy.mock.calls.find((call) =>
+        String(call[0]).includes("failed to clean up project"),
+      );
+      expect(logged).toBeDefined();
+      expect(String(logged?.[0])).toContain(orphan?.id as string);
+      expect((logged?.[1] as Error).message).toBe("cleanup failed (test)");
+    } finally {
+      errorSpy.mockRestore();
+    }
     ctx.close();
   });
 });

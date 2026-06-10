@@ -213,6 +213,33 @@ describe("secretStore", () => {
     }
   });
 
+  test("listVersionRecords returns full records newest first in one read", async () => {
+    const pid = newId("prj");
+    const eid = newId("env");
+    const key = "FULL";
+    const p1 = payload("v1");
+    const p2 = payload("v2");
+    await store.writeSecret(pid, eid, key, p1, actor, "create");
+    await store.writeSecret(pid, eid, key, p2, actor, "update");
+    await store.deleteSecret(pid, eid, key, actor);
+
+    const records = await store.listVersionRecords(pid, eid, key);
+    expect(records.map((r) => r.version)).toEqual([3, 2, 1]);
+    expect(records.map((r) => r.record.op)).toEqual([
+      "delete",
+      "update",
+      "create",
+    ]);
+    // Full ciphertext fields are present (unlike listVersions metadata).
+    expect(records[2]?.record.ct).toBe(p1.ct);
+    expect(records[2]?.record.nonce).toBe(p1.nonce);
+    expect(records[2]?.record.tag).toBe(p1.tag);
+    expect(records[2]?.record.dekV).toBe(p1.dekV);
+    expect(records[1]?.record.ct).toBe(p2.ct);
+    // Tombstone record has no ciphertext.
+    expect(records[0]?.record.ct).toBeUndefined();
+  });
+
   test("getVersion returns the exact full record, null when missing", async () => {
     const pid = newId("prj");
     const eid = newId("env");

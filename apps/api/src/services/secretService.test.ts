@@ -11,7 +11,7 @@ import {
 import { generateMasterKey, loadMasterKey } from "@safe/crypto";
 import { TEST_REDIS_URL } from "../../test/testRedis";
 import { newId, openDb, runMigrations } from "../db";
-import { createRedis } from "../redis/client";
+import { createRedis, type RedisLike } from "../redis/client";
 import {
   createSecretStore,
   type SecretActor,
@@ -209,6 +209,52 @@ describe("getSecretVersions", () => {
       [2, "two"],
       [1, "one"],
     ]);
+  });
+
+  test("uses exactly one redis round-trip regardless of version count", async () => {
+    const pid = newProject();
+    const eid = newId("env");
+    await service.setSecret(pid, eid, "K", "one", actor);
+    await service.setSecret(pid, eid, "K", "two", actor);
+    await service.setSecret(pid, eid, "K", "three", actor);
+    await service.deleteSecret(pid, eid, "K", actor);
+
+    let commands = 0;
+    const countingRedis: RedisLike = {
+      connect: () => redis.connect(),
+      close: () => {},
+      send: (command, args) => {
+        commands += 1;
+        return redis.send(command, args);
+      },
+      hget: (key, field) => {
+        commands += 1;
+        return redis.hget(key, field);
+      },
+      hgetall: (key) => {
+        commands += 1;
+        return redis.hgetall(key);
+      },
+      hkeys: (key) => {
+        commands += 1;
+        return redis.hkeys(key);
+      },
+    };
+    const countingService = createSecretService({
+      dekService,
+      secretStore: createSecretStore(countingRedis),
+    });
+
+    const versions = await countingService.getSecretVersions(pid, eid, "K", {
+      includeValues: true,
+    });
+    expect(versions).toHaveLength(4);
+    expect(versions.filter((v) => v.value !== undefined)).toHaveLength(3);
+    expect(commands).toBe(1);
+
+    commands = 0;
+    await countingService.getSecretVersions(pid, eid, "K", {});
+    expect(commands).toBe(1);
   });
 
   test("tombstone versions carry no value even with includeValues", async () => {

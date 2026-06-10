@@ -111,27 +111,33 @@ export function secretsRoutes(deps: SecretsDeps) {
           );
 
           // One audit entry per changed key; unchanged keys are silent.
+          // Appends run concurrently (Bun pipelines them on one connection);
+          // XADD assigns each entry a unique id either way.
+          const auditWrites: Promise<string>[] = [];
           for (const [action, changes] of [
             ["secret.create", result.created],
             ["secret.update", result.updated],
             ["secret.delete", result.deleted],
           ] as const) {
             for (const change of changes) {
-              await audit.appendAudit(
-                { projectId: project.id },
-                {
-                  action,
-                  actorType: "user",
-                  actorId: principal.userId,
-                  fields: {
-                    envId,
-                    key: change.key,
-                    version: String(change.version),
+              auditWrites.push(
+                audit.appendAudit(
+                  { projectId: project.id },
+                  {
+                    action,
+                    actorType: "user",
+                    actorId: principal.userId,
+                    fields: {
+                      envId,
+                      key: change.key,
+                      version: String(change.version),
+                    },
                   },
-                },
+                ),
               );
             }
           }
+          await Promise.all(auditWrites);
 
           return {
             created: result.created.map((c) => c.key),
@@ -236,13 +242,18 @@ export function secretsRoutes(deps: SecretsDeps) {
             { includeValues },
           );
           if (includeValues) {
+            // `versions` records how many historical values were actually
+            // decrypted for this read (tombstones carry none).
+            const decrypted = versions.filter(
+              (v) => v.value !== undefined,
+            ).length;
             await audit.appendAudit(
               { projectId: project.id },
               {
                 action: "secrets.read",
                 actorType: "user",
                 actorId: principal.userId,
-                fields: { envId, key: params.key, versions: "true" },
+                fields: { envId, key: params.key, versions: String(decrypted) },
               },
             );
           }

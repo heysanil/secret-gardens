@@ -305,29 +305,35 @@ export function createSecretService(deps: SecretServiceDeps): SecretService {
     },
 
     async getSecretVersions(projectId, envId, key, { includeValues = false }) {
-      const metas = await secretStore.listVersions(projectId, envId, key);
-      const entries: SecretVersionEntry[] = [];
-      for (const meta of metas) {
-        const entry: SecretVersionEntry = { ...meta };
-        if (includeValues && meta.hasValue) {
-          const record = await secretStore.getVersion(
+      // One HGETALL regardless of version count or includeValues — values
+      // are decrypted straight from the listed records, never re-fetched.
+      const records = await secretStore.listVersionRecords(
+        projectId,
+        envId,
+        key,
+      );
+      return records.map(({ version, record }) => {
+        const entry: SecretVersionEntry = {
+          version,
+          op: record.op,
+          actorType: record.actorType,
+          actorId: record.actorId,
+          ts: record.ts,
+          hasValue: record.ct !== undefined,
+        };
+        if (record.rollbackOf !== undefined) {
+          entry.rollbackOf = record.rollbackOf;
+        }
+        if (includeValues && record.ct !== undefined) {
+          entry.value = decryptRecord(
             projectId,
             envId,
             key,
-            meta.version,
+            record as CipherRecord,
           );
-          if (record?.ct !== undefined) {
-            entry.value = decryptRecord(
-              projectId,
-              envId,
-              key,
-              record as CipherRecord,
-            );
-          }
         }
-        entries.push(entry);
-      }
-      return entries;
+        return entry;
+      });
     },
 
     async deleteSecret(projectId, envId, key, actor) {

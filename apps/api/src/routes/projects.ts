@@ -191,7 +191,17 @@ export function projectsRoutes(deps: ProjectsDeps) {
           try {
             dekService.createProjectDek(projectId);
           } catch (err) {
-            db.run("DELETE FROM projects WHERE id = ?", [projectId]);
+            try {
+              db.run("DELETE FROM projects WHERE id = ?", [projectId]);
+            } catch (cleanupErr) {
+              // The cleanup failure must not mask the original DEK error;
+              // log the orphaned row (a project without a DEK is unusable
+              // but harmless) and surface the root cause below.
+              console.error(
+                `failed to clean up project ${projectId} after DEK creation error:`,
+                cleanupErr,
+              );
+            }
             throw err;
           }
 
@@ -272,6 +282,10 @@ export function projectsRoutes(deps: ProjectsDeps) {
       .delete(
         "/api/projects/:projectId",
         async ({ project, principal }) => {
+          // Acknowledged tradeoff: a crash between the sqlite delete and the
+          // redis cleanup below leaves orphaned redis keys. They are
+          // unreachable (every route resolves the project row first) and
+          // harmless; an ops sweep is documented in the Phase 9 docs.
           db.run("DELETE FROM projects WHERE id = ?", [project.id]);
           dekService.invalidate(project.id);
           await secretStore.deleteProjectData(project.id);

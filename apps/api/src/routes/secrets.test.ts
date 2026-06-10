@@ -356,4 +356,29 @@ describe("audit on reads", () => {
     expect(reads[0]?.envId).toBe(envId);
     expect(reads[0]?.keys).toBe("2");
   });
+
+  test("versions include_values audits the decrypted version count", async () => {
+    await api(ctx.app, "PUT", base("/K"), { cookie, body: { value: "one" } });
+    await api(ctx.app, "PUT", base("/K"), { cookie, body: { value: "two" } });
+    await api(ctx.app, "DELETE", base("/K"), { cookie }); // v3 tombstone
+
+    // Metadata-only versions read: no audit entry.
+    await api(ctx.app, "GET", base("/K/versions"), { cookie });
+    const res = await api(
+      ctx.app,
+      "GET",
+      `${base("/K/versions")}?include_values=true`,
+      { cookie },
+    );
+    expect(res.status).toBe(200);
+
+    const page = await ctx.audit.readAudit({ projectId }, { limit: 50 });
+    const reads = page.entries.filter(
+      (e) => e.action === "secrets.read" && e.key === "K",
+    );
+    expect(reads).toHaveLength(1);
+    expect(reads[0]?.envId).toBe(envId);
+    // Two versions decrypted; the tombstone carries no value.
+    expect(reads[0]?.versions).toBe("2");
+  });
 });
