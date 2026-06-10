@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   adminCreateUser,
+  api,
   createTestApp,
   signIn,
   signUp,
+  signUpUser,
 } from "../../test/testApp";
 import { TEST_REDIS_URL } from "../../test/testRedis";
 import { createRedis } from "../redis/client";
@@ -31,10 +33,11 @@ describe("GET /api/users", () => {
     ctx.close();
   });
 
-  test("members are forbidden", async () => {
+  test("members can list the user directory", async () => {
     const ctx = await createTestApp(redis);
+    const ownerEmail = uniqueEmail("owner");
     const { cookie: ownerCookie } = await signUp(ctx.app, {
-      email: uniqueEmail("owner"),
+      email: ownerEmail,
       password: "password123",
     });
     const memberEmail = uniqueEmail("member");
@@ -49,6 +52,36 @@ describe("GET /api/users", () => {
     const res = await ctx.app.handle(
       new Request("http://localhost/api/users", { headers: { cookie } }),
     );
+    expect(res.status).toBe(200);
+    const users = (await res.json()) as Array<{ email: string }>;
+    expect(users.map((u) => u.email).sort()).toEqual(
+      [ownerEmail, memberEmail].sort(),
+    );
+    ctx.close();
+  });
+
+  test("service tokens are forbidden", async () => {
+    const ctx = await createTestApp(redis);
+    const owner = await signUpUser(ctx.app, "owner");
+    const created = await api(ctx.app, "POST", "/api/projects", {
+      cookie: owner.cookie,
+      body: { name: "Directory Probe" },
+    });
+    expect(created.status).toBe(201);
+    const project = (await created.json()) as { id: string };
+    const minted = await api(
+      ctx.app,
+      "POST",
+      `/api/projects/${project.id}/tokens`,
+      {
+        cookie: owner.cookie,
+        body: { name: "ci", scope: "read_write" },
+      },
+    );
+    expect(minted.status).toBe(201);
+    const { token } = (await minted.json()) as { token: string };
+
+    const res = await api(ctx.app, "GET", "/api/users", { bearer: token });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "forbidden" });
     ctx.close();

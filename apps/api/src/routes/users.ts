@@ -15,7 +15,12 @@ interface UserRow {
   createdAt: string;
 }
 
-/** Instance-admin-only user listing (member picker in the web UI). */
+/**
+ * Instance user directory (the member picker in the web UI). Any signed-in
+ * user may list it: project admins who are not instance admins need it to
+ * add members — acceptable exposure for a self-hosted team tool. Service
+ * tokens are still rejected (requireAuth is user-only).
+ */
 export function usersRoutes(deps: UsersDeps) {
   return new Elysia().use(principalPlugin(deps)).get(
     "/api/users",
@@ -33,6 +38,6 @@ export function usersRoutes(deps: UsersDeps) {
         createdAt: row.createdAt,
       }));
     },
-    { requireInstanceAdmin: true },
+    { requireAuth: true },
   );
 }
