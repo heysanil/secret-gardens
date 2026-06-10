@@ -1,0 +1,4 @@
+# @safe/cli test configuration — preload verifies the integration Redis is up
+# (same convention as apps/api; the integration suite boots the real API).
+[test]
+preload = ["./test/preload.ts"]

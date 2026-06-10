@@ -16,7 +16,9 @@
     "lint": "biome check ."
   },
   "dependencies": {
+    "@clack/prompts": "^1.5.1",
     "@safe/api-client": "workspace:*",
-    "@safe/shared": "workspace:*"
+    "@safe/shared": "workspace:*",
+    "citty": "^0.2.2"
   }
 }
