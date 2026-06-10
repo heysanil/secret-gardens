@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+/*
+ * safe — dark-first theme.
+ * Deep neutral surfaces, one strong accent (warm amber), subtle borders
+ * over shadows, monospace for anything secret-shaped.
+ */
+@theme {
+  --color-bg: #0b0c0e;
+  --color-panel: #121316;
+  --color-raised: #18191d;
+  --color-hover: #1e2025;
+  --color-line: #25272d;
+  --color-line-strong: #34373f;
+
+  --color-ink: #e9eaee;
+  --color-ink-dim: #9da0aa;
+  --color-ink-faint: #5f626c;
+
+  --color-accent: #f0b429;
+  --color-accent-bright: #ffd45e;
+  --color-accent-dim: #8a6a14;
+
+  --color-ok: #4ade80;
+  --color-info: #60a5fa;
+  --color-danger: #f0564a;
+  --color-danger-dim: #7f2d27;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-bg font-sans text-[15px] text-ink antialiased;
+    font-feature-settings: "cv05", "ss01";
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
+
+  code,
+  kbd,
+  pre {
+    @apply font-mono;
+    font-feature-settings: normal;
+  }
+
+  /* Keyboard accessibility: a single, consistent focus treatment. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+  }
+
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-line);
+  }
+}
+
+@layer utilities {
+  /* CSS-only background texture for the auth screens: a faint blueprint
+     grid under a warm radial glow. */
+  .auth-texture {
+    background-image:
+      radial-gradient(
+        ellipse 80% 50% at 50% -10%,
+        color-mix(in srgb, var(--color-accent) 9%, transparent),
+        transparent 70%
+      ),
+      linear-gradient(
+        to right,
+        color-mix(in srgb, var(--color-line) 55%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--color-line) 55%, transparent) 1px,
+        transparent 1px
+      );
+    background-size:
+      100% 100%,
+      44px 44px,
+      44px 44px;
+  }
+
+  .mono-value {
+    @apply font-mono text-[13px] tabular-nums;
+  }
+}

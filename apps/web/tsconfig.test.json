@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["bun-types", "vite/client"]
+  },
+  "include": ["src"],
+  // bun-types already provides the full Bun ambience here; the app program's
+  // narrowed bridge would collide with it.
+  "exclude": ["src/types/server-types.d.ts"]
+}
