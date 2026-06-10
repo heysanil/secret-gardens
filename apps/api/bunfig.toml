@@ -1,0 +1,3 @@
+# @safe/api test configuration — preload verifies the integration Redis is up.
+[test]
+preload = ["./test/preload.ts"]
