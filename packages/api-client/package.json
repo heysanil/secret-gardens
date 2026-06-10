@@ -13,6 +13,11 @@
     "lint": "biome check ."
   },
   "dependencies": {
+    "@elysiajs/eden": "1.4.9",
     "@safe/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@safe/api": "workspace:*",
+    "elysia": "^1.4.28"
   }
 }
