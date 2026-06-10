@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { createDecipheriv } from "node:crypto";
 import {
   DecryptError,
   decryptSecret,
-  encodeAad,
   encryptSecret,
   generateDek,
   type SecretAad,
@@ -20,12 +20,22 @@ const aad: SecretAad = {
   secretKey: "DATABASE_URL",
 };
 
-describe("encodeAad", () => {
-  test("encodes exactly utf8 of projectId:envId:secretKey", () => {
-    const encoded = encodeAad(aad);
-    expect(
-      encoded.equals(Buffer.from("proj_1:env_1:DATABASE_URL", "utf8")),
-    ).toBe(true);
+describe("AAD binding (behavioral)", () => {
+  test("the AAD is exactly utf8 of projectId:envId:secretKey", () => {
+    // encodeAad is module-internal; assert the wire format behaviorally by
+    // decrypting with a hand-built GCM decipher using the documented AAD.
+    const dek = generateDek();
+    const enc = encryptSecret(dek, "value", aad);
+    const decipher = createDecipheriv("aes-256-gcm", dek, enc.nonce, {
+      authTagLength: 16,
+    });
+    decipher.setAAD(Buffer.from("proj_1:env_1:DATABASE_URL", "utf8"));
+    decipher.setAuthTag(enc.tag);
+    const plaintext = Buffer.concat([
+      decipher.update(enc.ct),
+      decipher.final(), // throws if the AAD bytes differ
+    ]).toString("utf8");
+    expect(plaintext).toBe("value");
   });
 });
 

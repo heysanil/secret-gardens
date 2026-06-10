@@ -11,11 +11,31 @@ export function isStrictBase64(value: string): boolean {
   return STRICT_BASE64_RE.test(value);
 }
 
+const KEK_ID_RE = /^[0-9a-f]{16}$/;
+
+const NONCE_BYTES = 12;
+const TAG_BYTES = 16;
+const WRAPPED_DEK_BYTES = 32;
+
 function decodeBase64Field(value: string, field: string): Buffer {
   if (!isStrictBase64(value)) {
     throw new CryptoError(`field "${field}" is not valid base64`);
   }
   return Buffer.from(value, "base64");
+}
+
+function decodeFixedLengthField(
+  value: string,
+  field: string,
+  expectedBytes: number,
+): Buffer {
+  const decoded = decodeBase64Field(value, field);
+  if (decoded.length !== expectedBytes) {
+    throw new CryptoError(
+      `field "${field}" must decode to exactly ${expectedBytes} bytes, got ${decoded.length}`,
+    );
+  }
+  return decoded;
 }
 
 export interface PackedEncrypted {
@@ -34,9 +54,11 @@ export function packEncrypted(e: EncryptedSecret): PackedEncrypted {
 
 export function unpackEncrypted(p: PackedEncrypted): EncryptedSecret {
   return {
+    // ct length is unconstrained: AES-GCM of an empty plaintext yields a
+    // 0-byte ct, and the empty string is valid base64 for it.
     ct: decodeBase64Field(p.ct, "ct"),
-    nonce: decodeBase64Field(p.nonce, "nonce"),
-    tag: decodeBase64Field(p.tag, "tag"),
+    nonce: decodeFixedLengthField(p.nonce, "nonce", NONCE_BYTES),
+    tag: decodeFixedLengthField(p.tag, "tag", TAG_BYTES),
   };
 }
 
@@ -57,10 +79,15 @@ export function packWrappedDek(w: WrappedDek): PackedWrappedDek {
 }
 
 export function unpackWrappedDek(p: PackedWrappedDek): WrappedDek {
+  if (!KEK_ID_RE.test(p.kekId)) {
+    throw new CryptoError(
+      'field "kekId" must be exactly 16 lowercase hex characters',
+    );
+  }
   return {
-    wrapped: decodeBase64Field(p.wrapped, "wrapped"),
-    nonce: decodeBase64Field(p.nonce, "nonce"),
-    tag: decodeBase64Field(p.tag, "tag"),
+    wrapped: decodeFixedLengthField(p.wrapped, "wrapped", WRAPPED_DEK_BYTES),
+    nonce: decodeFixedLengthField(p.nonce, "nonce", NONCE_BYTES),
+    tag: decodeFixedLengthField(p.tag, "tag", TAG_BYTES),
     kekId: p.kekId,
   };
 }

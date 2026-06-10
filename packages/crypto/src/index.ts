@@ -26,4 +26,4 @@ export {
 export type { KekId, MasterKey } from "./masterKey";
 export { generateMasterKey, loadMasterKey } from "./masterKey";
 export type { EncryptedSecret, SecretAad } from "./secret";
-export { decryptSecret, encodeAad, encryptSecret } from "./secret";
+export { decryptSecret, encryptSecret } from "./secret";

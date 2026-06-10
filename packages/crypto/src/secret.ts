@@ -19,8 +19,11 @@ const TAG_BYTES = 16;
 /**
  * Binds a ciphertext to its location: a value moved to another project,
  * environment, or key fails GCM authentication on decrypt.
+ *
+ * Module-internal — the AAD wire format is an implementation detail of
+ * encryptSecret/decryptSecret, not part of the public API.
  */
-export function encodeAad(aad: SecretAad): Buffer {
+function encodeAad(aad: SecretAad): Buffer {
   return Buffer.from(`${aad.projectId}:${aad.envId}:${aad.secretKey}`, "utf8");
 }
 

@@ -120,6 +120,16 @@ describe("wrapDek / unwrapDek", () => {
     expect(() => unwrapDek(mk, w, "proj_other")).toThrow(DekUnwrapError);
   });
 
+  test("each unwrap returns an independent buffer (zeroing one does not corrupt later unwraps)", () => {
+    const dek = generateDek();
+    const original = Buffer.from(dek);
+    const w = wrapDek(mk, dek, projectId);
+    const first = unwrapDek(mk, w, projectId);
+    first.fill(0);
+    const second = unwrapDek(mk, w, projectId);
+    expect(second.equals(original)).toBe(true);
+  });
+
   test("wrapDek rejects a non-32-byte dek with MasterKeyError", () => {
     expect(() => wrapDek(mk, randomBytes(31), projectId)).toThrow(
       MasterKeyError,

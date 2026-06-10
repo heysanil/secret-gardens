@@ -35,7 +35,7 @@ class MasterKeyImpl implements MasterKey {
   }
 }
 
-/** Internal accessor for sibling modules; not exported from the package. */
+/** @internal — package-private; do not import outside @safe/crypto */
 export function getWrappingKey(mk: MasterKey): Buffer {
   return MasterKeyImpl.wrappingKeyOf(mk);
 }

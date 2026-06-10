@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { randomBytes } from "node:crypto";
 import {
   CryptoError,
   decryptSecret,
@@ -53,6 +54,36 @@ describe("packEncrypted / unpackEncrypted", () => {
     expect(() => unpackEncrypted({ ...enc, nonce: "a" })).toThrow(CryptoError);
     expect(() => unpackEncrypted({ ...enc, tag: "!!!" })).toThrow(CryptoError);
   });
+
+  test("rejects a nonce that does not decode to exactly 12 bytes", () => {
+    const enc = packEncrypted(encryptSecret(dek, "v", aad));
+    const tooShort = randomBytes(11).toString("base64");
+    const tooLong = randomBytes(13).toString("base64");
+    expect(() => unpackEncrypted({ ...enc, nonce: tooShort })).toThrow(
+      CryptoError,
+    );
+    expect(() => unpackEncrypted({ ...enc, nonce: tooLong })).toThrow(
+      CryptoError,
+    );
+  });
+
+  test("rejects a tag that does not decode to exactly 16 bytes", () => {
+    const enc = packEncrypted(encryptSecret(dek, "v", aad));
+    const tooShort = randomBytes(15).toString("base64");
+    const tooLong = randomBytes(17).toString("base64");
+    expect(() => unpackEncrypted({ ...enc, tag: tooShort })).toThrow(
+      CryptoError,
+    );
+    expect(() => unpackEncrypted({ ...enc, tag: tooLong })).toThrow(
+      CryptoError,
+    );
+  });
+
+  test("accepts an empty ct (no length constraint on ciphertext)", () => {
+    const enc = packEncrypted(encryptSecret(dek, "", aad));
+    expect(enc.ct).toBe("");
+    expect(unpackEncrypted(enc).ct.length).toBe(0);
+  });
 });
 
 describe("packWrappedDek / unpackWrappedDek", () => {
@@ -87,5 +118,57 @@ describe("packWrappedDek / unpackWrappedDek", () => {
     expect(() => unpackWrappedDek({ ...packed, tag: "ab=c" })).toThrow(
       CryptoError,
     );
+  });
+
+  test("rejects wrapped that does not decode to exactly 32 bytes", () => {
+    const packed = packWrappedDek(wrapDek(mk, generateDek(), projectId));
+    const tooShort = randomBytes(31).toString("base64");
+    const tooLong = randomBytes(33).toString("base64");
+    expect(() => unpackWrappedDek({ ...packed, wrapped: tooShort })).toThrow(
+      CryptoError,
+    );
+    expect(() => unpackWrappedDek({ ...packed, wrapped: tooLong })).toThrow(
+      CryptoError,
+    );
+  });
+
+  test("rejects a nonce that does not decode to exactly 12 bytes", () => {
+    const packed = packWrappedDek(wrapDek(mk, generateDek(), projectId));
+    const tooShort = randomBytes(11).toString("base64");
+    const tooLong = randomBytes(13).toString("base64");
+    expect(() => unpackWrappedDek({ ...packed, nonce: tooShort })).toThrow(
+      CryptoError,
+    );
+    expect(() => unpackWrappedDek({ ...packed, nonce: tooLong })).toThrow(
+      CryptoError,
+    );
+  });
+
+  test("rejects a tag that does not decode to exactly 16 bytes", () => {
+    const packed = packWrappedDek(wrapDek(mk, generateDek(), projectId));
+    const tooShort = randomBytes(15).toString("base64");
+    const tooLong = randomBytes(17).toString("base64");
+    expect(() => unpackWrappedDek({ ...packed, tag: tooShort })).toThrow(
+      CryptoError,
+    );
+    expect(() => unpackWrappedDek({ ...packed, tag: tooLong })).toThrow(
+      CryptoError,
+    );
+  });
+
+  test("rejects a kekId that is not exactly 16 lowercase hex chars", () => {
+    const packed = packWrappedDek(wrapDek(mk, generateDek(), projectId));
+    const badKekIds = [
+      "", // empty
+      "abc123", // too short
+      "0123456789abcdef0", // too long
+      "0123456789ABCDEF", // uppercase hex
+      "ghijklmnopqrstuv", // non-hex chars, right length
+    ];
+    for (const kekId of badKekIds) {
+      expect(() => unpackWrappedDek({ ...packed, kekId })).toThrow(CryptoError);
+    }
+    // sanity: the real kekId still passes
+    expect(unpackWrappedDek(packed).kekId).toBe(mk.kekId);
   });
 });
