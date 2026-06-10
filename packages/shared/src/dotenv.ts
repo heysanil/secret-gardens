@@ -120,7 +120,8 @@ function escapeDoubleQuoted(value: string): string {
     .replaceAll("\\", "\\\\")
     .replaceAll('"', '\\"')
     .replaceAll("\n", "\\n")
-    .replaceAll("\r", "\\r");
+    .replaceAll("\r", "\\r")
+    .replaceAll("\t", "\\t");
 }
 
 export function serializeDotenv(secrets: Record<string, string>): string {

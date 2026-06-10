@@ -32,7 +32,7 @@ export function serviceTokenAllows(
   p: ServicePrincipal,
   action: ProjectAction,
   projectId: string,
-  envId?: string,
+  envId: string,
 ): boolean {
   if (p.projectId !== projectId) return false;
   if (action === "secrets.write") {
@@ -40,7 +40,7 @@ export function serviceTokenAllows(
   } else if (action !== "secrets.read") {
     return false;
   }
-  if (envId !== undefined && p.environmentIds !== null) {
+  if (p.environmentIds !== null) {
     return p.environmentIds.includes(envId);
   }
   return true;

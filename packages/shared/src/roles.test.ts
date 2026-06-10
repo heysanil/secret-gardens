@@ -100,7 +100,6 @@ describe("serviceTokenAllows", () => {
     test("denies every action when projectId does not match, even with read_write scope", () => {
       const p = principal({ scope: "read_write" });
       for (const action of ALL_ACTIONS) {
-        expect(serviceTokenAllows(p, action, "proj_other")).toBe(false);
         expect(serviceTokenAllows(p, action, "proj_other", "env_1")).toBe(
           false,
         );
@@ -112,11 +111,15 @@ describe("serviceTokenAllows", () => {
     const p = principal({ scope: "read" });
 
     test("allows secrets.read on the matching project", () => {
-      expect(serviceTokenAllows(p, "secrets.read", "proj_1")).toBe(true);
+      expect(serviceTokenAllows(p, "secrets.read", "proj_1", "env_1")).toBe(
+        true,
+      );
     });
 
     test("denies secrets.write", () => {
-      expect(serviceTokenAllows(p, "secrets.write", "proj_1")).toBe(false);
+      expect(serviceTokenAllows(p, "secrets.write", "proj_1", "env_1")).toBe(
+        false,
+      );
     });
   });
 
@@ -124,11 +127,15 @@ describe("serviceTokenAllows", () => {
     const p = principal({ scope: "read_write" });
 
     test("allows secrets.read on the matching project", () => {
-      expect(serviceTokenAllows(p, "secrets.read", "proj_1")).toBe(true);
+      expect(serviceTokenAllows(p, "secrets.read", "proj_1", "env_1")).toBe(
+        true,
+      );
     });
 
     test("allows secrets.write on the matching project", () => {
-      expect(serviceTokenAllows(p, "secrets.write", "proj_1")).toBe(true);
+      expect(serviceTokenAllows(p, "secrets.write", "proj_1", "env_1")).toBe(
+        true,
+      );
     });
   });
 
@@ -140,7 +147,6 @@ describe("serviceTokenAllows", () => {
     for (const action of nonSecretActions) {
       test(`${action} denied even with read_write scope, matching project, all envs`, () => {
         const p = principal({ scope: "read_write", environmentIds: null });
-        expect(serviceTokenAllows(p, action, "proj_1")).toBe(false);
         expect(serviceTokenAllows(p, action, "proj_1", "env_1")).toBe(false);
       });
     }
@@ -181,9 +187,21 @@ describe("serviceTokenAllows", () => {
       );
     });
 
-    test("omitting envId skips the environment check", () => {
-      const p = principal({ environmentIds: ["env_a"] });
-      expect(serviceTokenAllows(p, "secrets.read", "proj_1")).toBe(true);
+    test("env scoping is always enforced for env-restricted tokens", () => {
+      // envId is a required parameter, so callers cannot bypass the check;
+      // anything outside the allow-list is denied for every secrets action.
+      const p = principal({ scope: "read_write", environmentIds: ["env_a"] });
+      for (const envId of ["env_b", "ENV_A", "", "env_a "]) {
+        expect(serviceTokenAllows(p, "secrets.read", "proj_1", envId)).toBe(
+          false,
+        );
+        expect(serviceTokenAllows(p, "secrets.write", "proj_1", envId)).toBe(
+          false,
+        );
+      }
+      expect(serviceTokenAllows(p, "secrets.read", "proj_1", "env_a")).toBe(
+        true,
+      );
     });
 
     test("empty environmentIds array denies every explicit envId", () => {

@@ -186,6 +186,10 @@ describe("serializeDotenv", () => {
     expect(serializeDotenv({ FOO: "a\nb" })).toBe('FOO="a\\nb"\n');
   });
 
+  test("tabs are escaped inside double quotes", () => {
+    expect(serializeDotenv({ FOO: "a\tb" })).toBe('FOO="a\\tb"\n');
+  });
+
   test("double quotes and backslashes are escaped", () => {
     expect(serializeDotenv({ FOO: 'say "hi" \\o/' })).toBe(
       'FOO="say \\"hi\\" \\\\o/"\n',
