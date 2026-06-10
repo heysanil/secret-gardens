@@ -30,14 +30,17 @@ describe("GET /api/health", () => {
       new Request("http://localhost/api/health"),
     );
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual({
       status: "ok",
       checks: {
         redis: "ok",
         database: "ok",
-        kek: ctx.config.masterKey.kekId,
+        kek: "ok",
       },
     });
+    // The KEK fingerprint must never leak through this public endpoint.
+    expect(text).not.toContain(ctx.config.masterKey.kekId);
     ctx.close();
   });
 
@@ -54,7 +57,7 @@ describe("GET /api/health", () => {
     expect(body.status).toBe("error");
     expect(body.checks.redis).toBe("failed");
     expect(body.checks.database).toBe("ok");
-    expect(body.checks.kek).toBe(ctx.config.masterKey.kekId);
+    expect(body.checks.kek).toBe("ok");
     ctx.close();
   });
 

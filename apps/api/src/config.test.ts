@@ -23,6 +23,7 @@ describe("loadConfig", () => {
     expect(config.authSecret).toBe(validSecret);
     expect(config.github).toBeNull();
     expect(config.google).toBeNull();
+    expect(config.additionalOrigins).toEqual([]);
   });
 
   test("honors explicit values", () => {
@@ -169,6 +170,59 @@ describe("loadConfig", () => {
         );
       });
     }
+  });
+
+  describe("SAFE_ADDITIONAL_ORIGINS validation", () => {
+    test("absent → empty list", () => {
+      expect(loadConfig({ ...baseEnv }).additionalOrigins).toEqual([]);
+    });
+
+    test("empty string → empty list", () => {
+      expect(
+        loadConfig({ ...baseEnv, SAFE_ADDITIONAL_ORIGINS: "" })
+          .additionalOrigins,
+      ).toEqual([]);
+    });
+
+    test("single origin", () => {
+      expect(
+        loadConfig({
+          ...baseEnv,
+          SAFE_ADDITIONAL_ORIGINS: "http://localhost:5173",
+        }).additionalOrigins,
+      ).toEqual(["http://localhost:5173"]);
+    });
+
+    test("multiple origins with whitespace are trimmed and normalized", () => {
+      expect(
+        loadConfig({
+          ...baseEnv,
+          SAFE_ADDITIONAL_ORIGINS:
+            " http://localhost:5173 , https://app.example.com/ ",
+        }).additionalOrigins,
+      ).toEqual(["http://localhost:5173", "https://app.example.com"]);
+    });
+
+    for (const [label, value] of [
+      ["a bare host", "localhost:5173"],
+      ["a relative path", "/app"],
+      ["garbage", "not a url"],
+    ] as const) {
+      test(`rejects ${label}`, () => {
+        expect(() =>
+          loadConfig({ ...baseEnv, SAFE_ADDITIONAL_ORIGINS: value }),
+        ).toThrow(/SAFE_ADDITIONAL_ORIGINS/);
+      });
+    }
+
+    test("rejects non-http(s) schemes", () => {
+      expect(() =>
+        loadConfig({
+          ...baseEnv,
+          SAFE_ADDITIONAL_ORIGINS: "ftp://example.com",
+        }),
+      ).toThrow(/http or https/);
+    });
   });
 
   describe("SAFE_AUDIT_MAXLEN validation", () => {

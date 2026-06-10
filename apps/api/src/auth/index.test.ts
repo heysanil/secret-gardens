@@ -9,7 +9,7 @@ import {
 import { TEST_REDIS_URL } from "../../test/testRedis";
 import { ALLOW_SIGNUP_KEY, getInstanceSetting } from "../db/instance";
 import { createRedis } from "../redis/client";
-import { runAuthMigrations } from "./index";
+import { claimInstanceOwnership, runAuthMigrations } from "./index";
 
 const redis = createRedis(TEST_REDIS_URL);
 
@@ -92,6 +92,35 @@ describe("signup flow", () => {
     );
     expect(entry).toBeDefined();
     expect(entry?.actorType).toBe("user");
+    ctx.close();
+  });
+
+  test("concurrent first signups: exactly one user becomes owner", async () => {
+    const ctx = await createTestApp(redis);
+    // Simulate the race deterministically: both creates passed the signup
+    // gate before either user.create.after hook ran, so two role-less users
+    // exist when the hooks arbitrate ownership.
+    const now = new Date().toISOString();
+    for (const id of ["usr_race_one", "usr_race_two"]) {
+      ctx.db.run(
+        `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt, role)
+         VALUES (?, ?, ?, 0, ?, ?, 'member')`,
+        [id, "Racer", uniqueEmail(id), now, now],
+      );
+    }
+
+    expect(claimInstanceOwnership(ctx.db, "usr_race_one")).toBe(true);
+    expect(claimInstanceOwnership(ctx.db, "usr_race_two")).toBe(false);
+
+    const owners = ctx.db
+      .query<{ id: string }, []>("SELECT id FROM \"user\" WHERE role = 'owner'")
+      .all();
+    expect(owners).toEqual([{ id: "usr_race_one" }]);
+    const loser = ctx.db
+      .query<{ role: string }, [string]>('SELECT role FROM "user" WHERE id = ?')
+      .get("usr_race_two");
+    expect(loser?.role).toBe("member");
+    expect(getInstanceSetting(ctx.db, ALLOW_SIGNUP_KEY)).toBe("false");
     ctx.close();
   });
 

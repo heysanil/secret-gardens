@@ -25,6 +25,12 @@ export interface Config {
   github: OAuthProviderConfig | null;
   /** Google OAuth credentials; null = provider disabled. */
   google: OAuthProviderConfig | null;
+  /**
+   * Extra trusted origins for better-auth (SAFE_ADDITIONAL_ORIGINS,
+   * comma-separated absolute http(s) URLs) — e.g. the Vite dev server
+   * (http://localhost:5173) during development.
+   */
+  additionalOrigins: string[];
   /** XADD MAXLEN ~ threshold for audit streams; null = untrimmed. */
   auditMaxLen: number | null;
 }
@@ -70,6 +76,39 @@ function parseOAuthPair(
     );
   }
   return { clientId: id, clientSecret: secret };
+}
+
+/**
+ * Parses SAFE_ADDITIONAL_ORIGINS: a comma-separated list of absolute
+ * http(s) URLs, each normalized to its origin. Empty/absent → [].
+ */
+function parseAdditionalOrigins(raw: string | undefined): string[] {
+  if (raw === undefined) {
+    return [];
+  }
+  const origins: string[] = [];
+  for (const entry of raw.split(",")) {
+    const trimmed = entry.trim();
+    if (trimmed === "") {
+      continue;
+    }
+    let url: URL;
+    try {
+      url = new URL(trimmed);
+    } catch {
+      throw new ConfigError(
+        "SAFE_ADDITIONAL_ORIGINS must be a comma-separated list of absolute " +
+          "http(s) URLs (e.g. http://localhost:5173)",
+      );
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new ConfigError(
+        "SAFE_ADDITIONAL_ORIGINS entries must use http or https",
+      );
+    }
+    origins.push(url.origin);
+  }
+  return origins;
 }
 
 /**
@@ -135,6 +174,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     authSecret,
     github,
     google,
+    additionalOrigins: parseAdditionalOrigins(env.SAFE_ADDITIONAL_ORIGINS),
     auditMaxLen,
   };
 }

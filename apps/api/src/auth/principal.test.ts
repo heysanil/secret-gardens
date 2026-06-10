@@ -5,7 +5,11 @@ import { createTestApp, signUp, type TestApp } from "../../test/testApp";
 import { TEST_REDIS_URL } from "../../test/testRedis";
 import { newId } from "../db";
 import { createRedis } from "../redis/client";
-import { parseInstanceRole, resolvePrincipal } from "./principal";
+import {
+  createPrincipalResolver,
+  parseInstanceRole,
+  resolvePrincipal,
+} from "./principal";
 
 const redis = createRedis(TEST_REDIS_URL);
 
@@ -224,6 +228,51 @@ describe("resolvePrincipal", () => {
       }),
     );
     expect(res.errorCode).toBe("invalid_token");
+    ctx.close();
+  });
+});
+
+describe("createPrincipalResolver", () => {
+  test("resolves each request exactly once, even across stacked guards", async () => {
+    const ctx = await createTestApp(redis);
+    const { cookie } = await signUp(ctx.app, {
+      email: uniqueEmail("memo"),
+      password: "password123",
+    });
+    const resolver = createPrincipalResolver(ctx);
+    const request = new Request("http://localhost/api/me", {
+      headers: { cookie },
+    });
+
+    // Same Request object → the identical (cached) resolution promise.
+    const first = resolver(request);
+    const second = resolver(request);
+    expect(second).toBe(first);
+    expect((await first).principal).toEqual((await second).principal);
+
+    // A different Request object resolves independently.
+    const other = resolver(
+      new Request("http://localhost/api/me", { headers: { cookie } }),
+    );
+    expect(other).not.toBe(first);
+    expect((await other).errorCode).toBeNull();
+    ctx.close();
+  });
+
+  test("memoizes PAT resolutions per request object", async () => {
+    const ctx = await createTestApp(redis);
+    await signUp(ctx.app, {
+      email: uniqueEmail("memo-pat"),
+      password: "password123",
+    });
+    const token = insertToken(ctx, ownerUserId(ctx));
+    const resolver = createPrincipalResolver(ctx);
+    const request = bearerRequest(token);
+
+    const first = await resolver(request);
+    const second = await resolver(request);
+    expect(second).toBe(first);
+    expect(first.principal?.type).toBe("user");
     ctx.close();
   });
 });

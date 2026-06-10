@@ -30,11 +30,12 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 export function healthRoutes(deps: HealthDeps) {
   return new Elysia().get("/api/health", async ({ set }) => {
-    const kekId = deps.config.masterKey.kekId;
     const checks = {
       redis: "ok",
       database: "ok",
-      kek: kekId !== "" ? kekId : "failed",
+      // Presence check only — never expose the KEK fingerprint on an
+      // unauthenticated endpoint.
+      kek: deps.config.masterKey.kekId !== "" ? "ok" : "failed",
     };
     let healthy = checks.kek !== "failed";
 

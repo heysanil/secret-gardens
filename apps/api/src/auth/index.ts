@@ -4,14 +4,11 @@ import { getMigrations } from "better-auth/db/migration";
 import { admin } from "better-auth/plugins";
 import { adminAc, userAc } from "better-auth/plugins/admin/access";
 import type { Config } from "../config";
-import {
-  ALLOW_SIGNUP_KEY,
-  countUsers,
-  setInstanceSetting,
-} from "../db/instance";
+import { ALLOW_SIGNUP_KEY, setInstanceSetting } from "../db/instance";
 import type { AuditLog } from "../redis/audit";
 
 export {
+  createPrincipalResolver,
   type PrincipalDeps,
   type PrincipalResolution,
   parseInstanceRole,
@@ -37,6 +34,27 @@ const ARGON2ID_PARAMS = {
 } as const;
 
 /**
+ * Atomically promotes `userId` to instance owner iff no owner exists yet.
+ * The NOT EXISTS guard makes the UPDATE self-arbitrating: under concurrent
+ * first signups (both of which passed the signup gate before either hook
+ * ran), exactly one user wins. Only the winner flips allow_signup off.
+ * Returns true for the winner.
+ */
+export function claimInstanceOwnership(db: Database, userId: string): boolean {
+  const result = db.run(
+    `UPDATE "user" SET role = 'owner'
+     WHERE id = ?
+       AND NOT EXISTS (SELECT 1 FROM "user" WHERE role = 'owner')`,
+    [userId],
+  );
+  if (result.changes > 0) {
+    setInstanceSetting(db, ALLOW_SIGNUP_KEY, "false");
+    return true;
+  }
+  return false;
+}
+
+/**
  * Builds the better-auth instance.
  *
  * Instance roles (owner/admin/member) are modeled with the admin plugin
@@ -52,7 +70,7 @@ export function createAuth(deps: AuthDeps) {
     baseURL: config.publicUrl,
     basePath: "/api/auth",
     secret: config.authSecret,
-    trustedOrigins: [config.publicUrl],
+    trustedOrigins: [config.publicUrl, ...config.additionalOrigins],
     telemetry: { enabled: false },
     emailAndPassword: {
       enabled: true,
@@ -78,12 +96,7 @@ export function createAuth(deps: AuthDeps) {
           after: async (user) => {
             // First user becomes the instance owner; further self-signup is
             // disabled (admins create users / invitations thereafter).
-            if (countUsers(db) === 1) {
-              db.run("UPDATE \"user\" SET role = 'owner' WHERE id = ?", [
-                user.id,
-              ]);
-              setInstanceSetting(db, ALLOW_SIGNUP_KEY, "false");
-            }
+            claimInstanceOwnership(db, user.id);
           },
         },
       },

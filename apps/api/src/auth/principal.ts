@@ -131,18 +131,39 @@ export async function resolvePrincipal(
 }
 
 /**
+ * Memoizes resolvePrincipal per Request object so stacked guards on one
+ * route (e.g. requireAuth + requireInstanceAdmin) share a single resolution
+ * — one session lookup / one PAT lookup per request, not one per guard.
+ */
+export function createPrincipalResolver(
+  deps: PrincipalDeps,
+): (request: Request) => Promise<PrincipalResolution> {
+  const cache = new WeakMap<Request, Promise<PrincipalResolution>>();
+  return (request) => {
+    let pending = cache.get(request);
+    if (pending === undefined) {
+      pending = resolvePrincipal(deps, request);
+      cache.set(request, pending);
+    }
+    return pending;
+  };
+}
+
+/**
  * Route guards as Elysia macros:
  *   { requireAuth: true }          → 401 unless a user principal resolves
  *   { requireInstanceAdmin: true } → additionally 403 unless owner/admin
- * Both expose a typed UserPrincipal to the handler. Service principals
- * (Phase 6) never pass these guards — secrets routes will get their own
- * project-scoped guard; user/member/token/admin routes stay user-only.
+ * Both expose a typed UserPrincipal to the handler and share one memoized
+ * principal resolution per request. Service principals (Phase 6) never pass
+ * these guards — secrets routes will get their own project-scoped guard;
+ * user/member/token/admin routes stay user-only.
  */
 export function principalPlugin(deps: PrincipalDeps) {
+  const resolveOnce = createPrincipalResolver(deps);
   return new Elysia({ name: "principal" }).macro({
     requireAuth: {
       async resolve({ request, status }) {
-        const res = await resolvePrincipal(deps, request);
+        const res = await resolveOnce(request);
         if (res.errorCode !== null) {
           return status(401, { error: res.errorCode });
         }
@@ -157,7 +178,7 @@ export function principalPlugin(deps: PrincipalDeps) {
     },
     requireInstanceAdmin: {
       async resolve({ request, status }) {
-        const res = await resolvePrincipal(deps, request);
+        const res = await resolveOnce(request);
         if (res.errorCode !== null) {
           return status(401, { error: res.errorCode });
         }

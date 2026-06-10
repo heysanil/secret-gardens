@@ -79,8 +79,11 @@ describe("audit log", () => {
     expect(entry.actorId).toBe("usr_rt");
     expect(entry.envId).toBe("env_rt");
     expect(entry.secretKey).toBe("API_KEY");
-    expect(entry.ts).toBeGreaterThanOrEqual(before);
-    expect(entry.ts).toBeLessThanOrEqual(Date.now());
+    // The entry-id timestamp comes from the Redis server clock, which can
+    // drift slightly from the host clock (e.g. Redis in a Docker VM).
+    const CLOCK_SKEW_MS = 5_000;
+    expect(entry.ts).toBeGreaterThanOrEqual(before - CLOCK_SKEW_MS);
+    expect(entry.ts).toBeLessThanOrEqual(Date.now() + CLOCK_SKEW_MS);
     expect(page.nextCursor).toBeNull();
   });
 
