@@ -41,6 +41,8 @@ const FRIENDLY: Record<string, string> = {
     "Your current token is about to expire — sign in again to create new tokens.",
   decrypt_failed:
     "The server could not decrypt a secret. Check the server logs.",
+  internal_error:
+    "Something went wrong on the server — try again, or check the server logs.",
 };
 
 function codeOf(value: unknown): string | null {

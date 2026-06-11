@@ -127,6 +127,12 @@ export function apiError(
         `The server rejected the request (${code ?? "invalid request"})${detail}.`,
       );
     }
+    case 500:
+      return code === "internal_error"
+        ? new CliError(
+            `The server hit an unexpected error — try again, or check the server logs on ${host}.`,
+          )
+        : new CliError(`API error from ${host} (HTTP 500).`);
     default:
       return new CliError(
         `API error from ${host} (HTTP ${status}${code === null ? "" : `, ${code}`}).`,
