@@ -77,6 +77,16 @@ no login needed:
 GARDENS_TOKEN=sg_st_... gardens run -- ./deploy.sh
 ```
 
+## API docs
+
+Every instance serves its own interactive API reference (Scalar) at
+**`/docs`**, with the raw OpenAPI 3.0 spec at **`/docs/json`** — covering all
+routes, request/response schemas, the three authentication methods, the
+error-code reference, and CLI/CI usage. Both endpoints are public (no auth):
+they describe this open-source API surface and carry no instance data. See
+[docs/self-hosting.md](docs/self-hosting.md) for the air-gapped-deployment
+note (the UI loads its JS from a CDN by default).
+
 ## Development
 
 ```sh

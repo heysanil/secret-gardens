@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { type Auth, parseInstanceRole, principalPlugin } from "../auth";
+import { ERROR_401, ERROR_403 } from "./errorSchemas";
 
 export interface UsersDeps {
   db: Database;
@@ -38,6 +39,34 @@ export function usersRoutes(deps: UsersDeps) {
         createdAt: row.createdAt,
       }));
     },
-    { requireAuth: true },
+    {
+      requireAuth: true,
+      detail: {
+        summary: "List instance users",
+        description:
+          "The full user directory with instance roles — powers the " +
+          "member picker in the web UI. Any signed-in user may list it " +
+          "(project admins who are not instance admins need it to add " +
+          "members); service tokens are rejected with 403.",
+        tags: ["Users"],
+      },
+      response: {
+        200: t.Array(
+          t.Object({
+            id: t.String(),
+            name: t.String(),
+            email: t.String(),
+            role: t.Union([
+              t.Literal("owner"),
+              t.Literal("admin"),
+              t.Literal("member"),
+            ]),
+            createdAt: t.String(),
+          }),
+        ),
+        401: ERROR_401,
+        403: ERROR_403,
+      },
+    },
   );
 }

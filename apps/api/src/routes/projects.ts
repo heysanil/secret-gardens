@@ -12,6 +12,12 @@ import {
   DecryptFailedError,
   type SecretService,
 } from "../services/secretService";
+import {
+  ERROR_401,
+  ERROR_403,
+  ERROR_404,
+  ERROR_500_DECRYPT,
+} from "./errorSchemas";
 
 export interface ProjectsDeps {
   db: Database;
@@ -40,6 +46,31 @@ const DEFAULT_ENVIRONMENTS = [
   { name: "Staging", slug: "staging" },
   { name: "Production", slug: "prod" },
 ] as const;
+
+const ROLE_SCHEMA = t.Union([
+  t.Literal("admin"),
+  t.Literal("write"),
+  t.Literal("read"),
+]);
+
+const ENVIRONMENT_SCHEMA = t.Object({
+  id: t.String(),
+  name: t.String(),
+  slug: t.String(),
+  position: t.Number(),
+});
+
+/** Full project detail as seen by user principals. */
+const PROJECT_DETAIL_SCHEMA = t.Object({
+  id: t.String(),
+  name: t.String(),
+  slug: t.String(),
+  description: t.Union([t.String(), t.Null()]),
+  createdAt: t.Number(),
+  updatedAt: t.Number(),
+  role: ROLE_SCHEMA,
+  environments: t.Array(ENVIRONMENT_SCHEMA),
+});
 
 interface EnvironmentRow {
   id: string;
@@ -138,7 +169,34 @@ export function projectsRoutes(deps: ProjectsDeps) {
             ) as ProjectRole,
           }));
         },
-        { requireAuth: true },
+        {
+          requireAuth: true,
+          detail: {
+            summary: "List projects",
+            description:
+              "Projects visible to the caller with their resolved role and " +
+              "environment count. Instance owners/admins see every project " +
+              "(implicit admin role); members see only projects they have " +
+              "joined. Service tokens are rejected with 403 — they read " +
+              "their one project via its detail route instead.",
+            tags: ["Projects"],
+          },
+          response: {
+            200: t.Array(
+              t.Object({
+                id: t.String(),
+                name: t.String(),
+                slug: t.String(),
+                description: t.Union([t.String(), t.Null()]),
+                createdAt: t.Number(),
+                environmentCount: t.Number(),
+                role: ROLE_SCHEMA,
+              }),
+            ),
+            401: ERROR_401,
+            403: ERROR_403,
+          },
+        },
       )
       .post(
         "/api/projects",
@@ -234,6 +292,26 @@ export function projectsRoutes(deps: ProjectsDeps) {
             slug: t.Optional(t.String({ minLength: 1, maxLength: 63 })),
             description: t.Optional(t.String({ maxLength: 500 })),
           }),
+          detail: {
+            summary: "Create a project",
+            description:
+              "Creates a project with three default environments (`dev`, " +
+              "`staging`, `prod`), makes the creator a project admin, and " +
+              "provisions a fresh data-encryption key. The slug is derived " +
+              "from the name when omitted (lowercase letters, digits, " +
+              "hyphens; 422 `invalid_slug` when underivable, 409 " +
+              "`duplicate_slug` when taken). Any signed-in user may create " +
+              "projects. Appends `project.create` audit entries to both the " +
+              "project and instance streams.",
+            tags: ["Projects"],
+          },
+          response: {
+            201: PROJECT_DETAIL_SCHEMA,
+            401: ERROR_401,
+            403: ERROR_403,
+            409: t.Object({ error: t.Literal("duplicate_slug") }),
+            422: t.Object({ error: t.Literal("invalid_slug") }),
+          },
         },
       )
       .get(
@@ -265,6 +343,96 @@ export function projectsRoutes(deps: ProjectsDeps) {
           requireProjectAction: {
             minRole: "read",
             serviceAction: "project.read",
+          },
+          // Doc-only responses (no runtime schema): the shape is a union on
+          // the principal type, which Elysia's per-status response maps
+          // cannot express without lying to Eden consumers.
+          detail: {
+            summary: "Get a project",
+            description:
+              "Project detail including its environments. The shape depends " +
+              "on the principal: **users** (role `read`+) get the full " +
+              "detail — description, timestamps, resolved role, all " +
+              "environments. **Service tokens** get a deliberately filtered " +
+              "view — id/name/slug plus only the environments the token may " +
+              "access (all when unscoped), with no role, description, or " +
+              "timestamps — just enough for CI to resolve environment slugs " +
+              "to ids before pulling secrets. Non-members and foreign " +
+              "service tokens get 404, never 403.",
+            tags: ["Projects"],
+            responses: {
+              200: {
+                description:
+                  "Full detail (user principals) or the filtered " +
+                  "id/name/slug/environments view (service tokens).",
+                content: {
+                  "application/json": {
+                    schema: {
+                      oneOf: [
+                        {
+                          type: "object",
+                          description: "User principal: full detail.",
+                          properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            slug: { type: "string" },
+                            description: {
+                              type: "string",
+                              nullable: true,
+                            },
+                            createdAt: { type: "number" },
+                            updatedAt: { type: "number" },
+                            role: {
+                              type: "string",
+                              enum: ["admin", "write", "read"],
+                            },
+                            environments: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  id: { type: "string" },
+                                  name: { type: "string" },
+                                  slug: { type: "string" },
+                                  position: { type: "number" },
+                                },
+                              },
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          description:
+                            "Service-token principal: filtered view.",
+                          properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            slug: { type: "string" },
+                            environments: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  id: { type: "string" },
+                                  name: { type: "string" },
+                                  slug: { type: "string" },
+                                  position: { type: "number" },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+              401: { description: "Missing or invalid credentials." },
+              404: {
+                description:
+                  "Unknown project — or one the caller is not a member of.",
+              },
+            },
           },
         },
       )
@@ -304,6 +472,22 @@ export function projectsRoutes(deps: ProjectsDeps) {
             name: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
             description: t.Optional(t.String({ maxLength: 500 })),
           }),
+          detail: {
+            summary: "Update a project",
+            description:
+              "Renames a project and/or replaces its description (slugs are " +
+              "immutable). Project admins only; user principals only. " +
+              "Appends a `project.update` audit entry naming the changed " +
+              "fields — a no-op body skips both the write and the audit " +
+              "entry. Returns the full detail either way.",
+            tags: ["Projects"],
+          },
+          response: {
+            200: PROJECT_DETAIL_SCHEMA,
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
+          },
         },
       )
       .delete(
@@ -328,7 +512,25 @@ export function projectsRoutes(deps: ProjectsDeps) {
           });
           return { deleted: true };
         },
-        { requireProject: "admin" },
+        {
+          requireProject: "admin",
+          detail: {
+            summary: "Delete a project",
+            description:
+              "Irreversibly deletes the project: metadata, memberships and " +
+              "wrapped keys (SQLite cascade), every secret and version " +
+              "ciphertext, and the project's audit stream (Redis). The " +
+              "instance audit stream keeps a `project.delete` record. " +
+              "Project admins only; user principals only.",
+            tags: ["Projects"],
+          },
+          response: {
+            200: t.Object({ deleted: t.Boolean() }),
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
+          },
+        },
       )
       .post(
         "/api/projects/:projectId/rotate-dek",
@@ -368,7 +570,33 @@ export function projectsRoutes(deps: ProjectsDeps) {
           });
           return result;
         },
-        { requireProject: "admin" },
+        {
+          requireProject: "admin",
+          detail: {
+            summary: "Rotate the project data-encryption key",
+            description:
+              "Mints a new DEK version and re-encrypts every **current** " +
+              "secret under it (`gardens rotate dek`). Historical versions " +
+              "keep their retired key version and stay readable; no version " +
+              "history is added. Not atomic: a mid-rotation failure leaves " +
+              "every record decryptable (rewritten ones under the new key, " +
+              "the rest via their recorded key version) — re-run to finish. " +
+              "Appends `dek.rotate` audit entries to the project and " +
+              "instance streams. Project admins only; user principals only.",
+            tags: ["Rotation"],
+          },
+          response: {
+            200: t.Object({
+              oldVersion: t.Number(),
+              newVersion: t.Number(),
+              secretsRewritten: t.Number(),
+            }),
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
+            500: ERROR_500_DECRYPT,
+          },
+        },
       )
   );
 }

@@ -49,6 +49,7 @@ The required loop:
 |---|---|
 | Env vars (`apps/api/src/config.ts`) | `docker-compose.yml`, `scripts/setup.sh`, the env table in `docs/self-hosting.md`, `docker/Dockerfile` (ENV defaults), `e2e/scripts/start-server.ts`, and the Commands section below |
 | API routes or error codes (`apps/api/src/routes/*`, `apps/api/src/app.ts`) | the `FRIENDLY` map in `apps/web/src/api.ts`, the error mapping in `apps/cli/src/lib/api.ts`, and this file's route inventory (§5) |
+| Add/change an API route | the route MUST include `detail` metadata (summary/description/tags; `security: []` if public) — `apps/api/src/openapi.test.ts` fails without it — and the OpenAPI `info.description` in `apps/api/src/openapi.ts` must be updated whenever error codes or auth semantics change (its error table mirrors §5) |
 | CLI commands/flags (`apps/cli/src/commands/*`) | the CLI table in `README.md` and `apps/cli/AGENTS.md` |
 | Crypto scheme details (`packages/crypto`) | `docs/security.md`. **HARD WARNING:** the label strings are data-compatibility-critical — `secret-gardens/v1/dek-wrap` (HKDF info, `masterKey.ts`), `secret-gardens-dek:` (DEK AAD prefix, `dek.ts`), `secret-gardens-kek-check-v1` (boot-check constant, `apps/api/src/services/kekCheck.ts`), `aes-256-gcm:v1` (record `alg`, `apps/api/src/services/secretService.ts`). Changing any of them **bricks existing deployments' data**: previously wrapped DEKs and stored ciphertext stop authenticating. They are frozen; never "tidy" or rename them. |
 | Audit actions (`packages/shared/src/audit.ts`) | the project filter in `apps/web/src/pages/ProjectAuditPage.tsx` (`PROJECT_AUDIT_ACTIONS`), the `KNOWN_ACTIONS` validation in `apps/api/src/routes/audit.ts`, and `docs/self-hosting.md` |
@@ -109,7 +110,8 @@ bun run test:e2e                 # bun run --cwd e2e test → playwright test
 
 ```sh
 # API on :3000 — needs GARDENS_MASTER_KEY (base64 32 bytes), BETTER_AUTH_SECRET
-# (≥32 chars) and a reachable Redis (default redis://localhost:6379):
+# (≥32 chars) and a reachable Redis (default redis://localhost:6379).
+# Serves its OpenAPI docs at /docs (Scalar UI) and /docs/json (spec):
 cd apps/api && bun --watch src/index.ts
 
 # Web on :5173 (Vite proxies /api → :3000). The API must also have
@@ -174,9 +176,11 @@ docker compose run --rm \
 
 ### Route inventory (update on any route change — see §2)
 
-Public: `GET /api/health`, `GET /api/bootstrap`. better-auth owns
-`/api/auth/*` (mounted; sign-up gated by `allow_signup`, sign-in wrapped for
-failed-login auditing in `apps/api/src/app.ts`). Authenticated:
+Public: `GET /api/health`, `GET /api/bootstrap`, `GET /docs` (Scalar OpenAPI
+UI) + `GET /docs/json` (OpenAPI spec — both deliberately unauthenticated,
+`apps/api/src/openapi.ts`). better-auth owns `/api/auth/*` (mounted; sign-up
+gated by `allow_signup`, sign-in wrapped for failed-login auditing in
+`apps/api/src/app.ts`). Authenticated:
 
 - `GET /api/me`; `GET|POST /api/me/tokens`; `DELETE /api/me/tokens/:id`
 - `GET /api/users`

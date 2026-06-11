@@ -8,6 +8,7 @@ import {
   countUsers,
   getInstanceSetting,
 } from "./db/instance";
+import { openapiPlugin } from "./openapi";
 import type { AuditLog } from "./redis/audit";
 import type { RedisLike } from "./redis/client";
 import { createSecretStore } from "./redis/secretStore";
@@ -88,6 +89,10 @@ export function createApp(deps: AppDeps) {
   const secretService = createSecretService({ dekService, secretStore });
   return (
     new Elysia()
+      // OpenAPI docs: Scalar UI at GET /docs, JSON spec at GET /docs/json.
+      // Both public by design. Explicit GET routes, so they keep winning
+      // over the static-mode SPA `GET /*` fallback (staticWeb.ts).
+      .use(openapiPlugin())
       // Signup gate: once a first user exists and allow_signup has been
       // flipped off, self-signup is closed (admins create users instead).
       // With zero users, signup is always allowed (bootstrap state).

@@ -182,6 +182,38 @@ describe("mountWebDist", () => {
     ).toBe(true);
   });
 
+  test("GET /docs wins over the SPA fallback in static mode", async () => {
+    // The openapi plugin registers explicit GET routes; the SPA `GET /*`
+    // must never shadow them, or static-mode deployments lose their docs.
+    const res = await ctx.app.handle(new Request("http://localhost/docs"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain('id="api-reference"');
+    expect(html).not.toContain("secret-gardens web ui");
+  });
+
+  test("GET /docs/json serves the spec (not index.html) in static mode", async () => {
+    const res = await ctx.app.handle(new Request("http://localhost/docs/json"));
+    expect(res.status).toBe(200);
+    const spec = (await res.json()) as {
+      openapi?: string;
+      paths?: Record<string, unknown>;
+    };
+    expect(spec.openapi).toBeString();
+    const paths = Object.keys(spec.paths ?? {});
+    // Static-mode noise (per-file routes, '/', '/*') must stay excluded.
+    for (const path of paths) {
+      expect(path).toStartWith("/api/");
+    }
+    expect(paths.length).toBeGreaterThanOrEqual(20);
+    const operations = Object.values(spec.paths ?? {}).reduce(
+      (n: number, methods) => n + Object.keys(methods as object).length,
+      0,
+    );
+    expect(operations).toBeGreaterThan(25);
+  });
+
   test("HEAD requests route through the GET fallback", async () => {
     // Elysia maps HEAD onto GET handlers: the SPA fallback answers HEAD
     // with the html headers and an empty body…

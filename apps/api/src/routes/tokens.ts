@@ -5,6 +5,7 @@ import { Elysia, t } from "elysia";
 import { type Auth, principalPlugin } from "../auth";
 import { newId } from "../db";
 import type { AuditLog } from "../redis/audit";
+import { ERROR_401, ERROR_403, ERROR_404 } from "./errorSchemas";
 
 export interface TokensDeps {
   db: Database;
@@ -17,6 +18,21 @@ const DAY_MS = 86_400_000;
 const TOKEN_DISPLAY_PREFIX_LEN = 12;
 /** ~10 years — service tokens may be long-lived but never immortal-by-typo. */
 const MAX_EXPIRES_IN_DAYS = 3650;
+
+const SCOPE_SCHEMA = t.Union([t.Literal("read"), t.Literal("read_write")]);
+
+const SERVICE_TOKEN_SCHEMA = t.Object({
+  id: t.String(),
+  name: t.String(),
+  tokenPrefix: t.String(),
+  scope: SCOPE_SCHEMA,
+  environmentIds: t.Union([t.Array(t.String()), t.Null()]),
+  expiresAt: t.Union([t.Number(), t.Null()]),
+  lastUsedAt: t.Union([t.Number(), t.Null()]),
+  revokedAt: t.Union([t.Number(), t.Null()]),
+  createdBy: t.String(),
+  createdAt: t.Number(),
+});
 
 interface ServiceTokenListRow {
   id: string;
@@ -68,7 +84,26 @@ export function tokensRoutes(deps: TokensDeps) {
           createdAt: row.created_at,
         }));
       },
-      { requireProject: "admin" },
+      {
+        requireProject: "admin",
+        detail: {
+          summary: "List service tokens",
+          description:
+            "Every service token ever minted for the project, newest " +
+            "first, including revoked and expired ones. Only display " +
+            "prefixes — never token plaintext. `environmentIds: null` " +
+            "means all environments. Project admins only; service " +
+            "principals never pass these routes (a token must not be able " +
+            "to mint or revoke tokens).",
+          tags: ["Service Tokens"],
+        },
+        response: {
+          200: t.Array(SERVICE_TOKEN_SCHEMA),
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+        },
+      },
     )
     .post(
       "/",
@@ -162,6 +197,38 @@ export function tokensRoutes(deps: TokensDeps) {
             t.Integer({ minimum: 1, maximum: MAX_EXPIRES_IN_DAYS }),
           ),
         }),
+        detail: {
+          summary: "Create a service token",
+          description:
+            "Mints a project-scoped token (`sg_st_…`) for CI: scope " +
+            "`read` or `read_write`, optionally restricted to specific " +
+            "environments (omitted/`null` = all, present and future). " +
+            "Expiry caps at 3650 days. **Show-once**: `token` appears " +
+            "only in this response — the server stores a SHA-256 hash " +
+            "plus the 12-character display prefix. Unknown environment " +
+            "ids are rejected with 422 `invalid_environment_ids` (the " +
+            "offenders echoed). Appends a `token.create` audit entry. " +
+            "Project admins only; user principals only.",
+          tags: ["Service Tokens"],
+        },
+        response: {
+          201: t.Object({
+            id: t.String(),
+            name: t.String(),
+            token: t.String(),
+            tokenPrefix: t.String(),
+            scope: SCOPE_SCHEMA,
+            environmentIds: t.Union([t.Array(t.String()), t.Null()]),
+            expiresAt: t.Union([t.Number(), t.Null()]),
+          }),
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+          422: t.Object({
+            error: t.Literal("invalid_environment_ids"),
+            environmentIds: t.Array(t.String()),
+          }),
+        },
       },
     )
     .delete(
@@ -192,6 +259,24 @@ export function tokensRoutes(deps: TokensDeps) {
         }
         return { revoked: true };
       },
-      { requireProject: "admin" },
+      {
+        requireProject: "admin",
+        detail: {
+          summary: "Revoke a service token",
+          description:
+            "Revokes a service token; in-flight CI using it starts " +
+            "failing with 401 `invalid_token` immediately. Idempotent: " +
+            "re-revoking returns `revoked: true` without a new audit " +
+            "entry; first revocation appends `token.revoke`. Project " +
+            "admins only; user principals only.",
+          tags: ["Service Tokens"],
+        },
+        response: {
+          200: t.Object({ revoked: t.Boolean() }),
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+        },
+      },
     );
 }

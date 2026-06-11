@@ -23,6 +23,13 @@ listening, no env reads — so tests and Eden type extraction can import it.
 - `src/services/secretService.ts` — THE encryption boundary (see root §5).
 - `src/services/kekCheck.ts` / `kekRotation.ts` + `scripts/rotate-kek.ts` —
   KEK fingerprint boot-check and rotation.
+- `src/openapi.ts` — `@elysiajs/openapi` plugin config: Scalar UI at
+  `GET /docs`, spec at `GET /docs/json` (both public), the long markdown
+  `info.description`, tags, security schemes, and the route-path excludes
+  (exact-string only in plugin 1.4 — regexes silently do nothing).
+  `API_VERSION` is hardcoded and test-pinned to package.json.
+- `src/routes/errorSchemas.ts` — shared 401/403/404/500 response schemas
+  for route `response` maps.
 - `src/staticWeb.ts` — serves the built SPA; route-precedence-sensitive
   (root AGENTS.md §8).
 - `test/testApp.ts` — integration harness (in-memory SQLite + real Redis);
@@ -31,6 +38,20 @@ listening, no env reads — so tests and Eden type extraction can import it.
 
 ## Invariants
 
+- **Every route MUST ship `detail` metadata** — `summary`, a genuinely
+  useful `description` (semantics, side effects, error cases), `tags` from
+  the tag set in `src/openapi.ts`, and `security: []` for public routes.
+  `src/openapi.test.ts` fails any operation missing them.
+- **Runtime `response` schemas are validated AND status-rewriting.** When a
+  route declares a `response` map, Elysia (1.4) runtime-validates every
+  status that IS declared (mismatch → 422), and a handler `status(...)` for
+  an UNdeclared status is silently rewritten to HTTP 200 — so a route with
+  a response map must declare every status its handler can return (tsc
+  enforces this too). Guard/macro early-returns and `onError` responses
+  bypass response validation entirely. For shapes a schema can't honestly
+  express (unions on principal type, free-form audit fields), use doc-only
+  `detail.responses` instead — but never both on one route: a runtime map
+  resets `detail.responses` in the generated spec.
 - **Guards only.** Every route's authz is one of `requireAuth`,
   `requireInstanceAdmin`, `requireProject: minRole`, or
   `requireProjectAction: {minRole, serviceAction}`. Never inline permission
@@ -71,6 +92,8 @@ cd apps/api && bun --watch src/index.ts   # dev server (needs GARDENS_MASTER_KEY
 
 Per the root contract (root `AGENTS.md` §2): env vars → compose/setup.sh/
 self-hosting table/Dockerfile/e2e start-server; routes or error codes → web
-`FRIENDLY` map, CLI error mapping, root route inventory; audit actions →
-shared/audit.ts consumers; anything crypto-adjacent → `docs/security.md`.
-better-auth version moves in lockstep with `apps/web`.
+`FRIENDLY` map, CLI error mapping, root route inventory, AND the OpenAPI
+error table in `src/openapi.ts` (`info.description`); new routes → `detail`
+metadata (first invariant above); audit actions → shared/audit.ts consumers;
+anything crypto-adjacent → `docs/security.md`. better-auth version moves in
+lockstep with `apps/web`.

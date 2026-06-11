@@ -5,6 +5,7 @@ import { Elysia, t } from "elysia";
 import { type Auth, principalPlugin } from "../auth";
 import { newId } from "../db";
 import type { AuditLog } from "../redis/audit";
+import { ERROR_401, ERROR_403, ERROR_404 } from "./errorSchemas";
 
 export interface MeDeps {
   db: Database;
@@ -22,6 +23,17 @@ const TOKEN_DISPLAY_PREFIX_LEN = 12;
  * uncapped (up to the schema's 365-day maximum).
  */
 const PAT_MINTED_MAX_MS = 30 * DAY_MS;
+
+const USER_TOKEN_SCHEMA = t.Object({
+  id: t.String(),
+  name: t.String(),
+  tokenPrefix: t.String(),
+  createdAt: t.Number(),
+  expiresAt: t.Union([t.Number(), t.Null()]),
+  lastUsedAt: t.Union([t.Number(), t.Null()]),
+  revokedAt: t.Union([t.Number(), t.Null()]),
+  createdVia: t.Union([t.Literal("session"), t.Literal("token")]),
+});
 
 interface UserTokenListRow {
   id: string;
@@ -63,7 +75,33 @@ export function meRoutes(deps: MeDeps) {
           instanceRole: principal.instanceRole,
         };
       },
-      { requireAuth: true },
+      {
+        requireAuth: true,
+        detail: {
+          summary: "Current user",
+          description:
+            "Identity and instance role (`owner`/`admin`/`member`) of the " +
+            "authenticated user. Works with a session cookie or a personal " +
+            "access token; service tokens are rejected with 403 (they have " +
+            "no user identity).",
+          tags: ["Account"],
+        },
+        response: {
+          200: t.Object({
+            type: t.Literal("user"),
+            userId: t.String(),
+            email: t.String(),
+            name: t.String(),
+            instanceRole: t.Union([
+              t.Literal("owner"),
+              t.Literal("admin"),
+              t.Literal("member"),
+            ]),
+          }),
+          401: ERROR_401,
+          403: ERROR_403,
+        },
+      },
     )
     .post(
       "/api/me/tokens",
@@ -122,6 +160,31 @@ export function meRoutes(deps: MeDeps) {
           name: t.String({ minLength: 1, maxLength: 100 }),
           expiresInDays: t.Optional(t.Integer({ minimum: 1, maximum: 365 })),
         }),
+        detail: {
+          summary: "Create a personal access token",
+          description:
+            "Mints a PAT (`sg_ut_…`) acting as the authenticated user. " +
+            "**Show-once**: `token` appears only in this response — the " +
+            "server stores a SHA-256 hash plus the 12-character display " +
+            "prefix. When the caller authenticates with a PAT (the CLI " +
+            "does), the new token's lifetime is capped at min(30 days, the " +
+            "parent token's remaining lifetime); an already-expired parent " +
+            "yields 422 `parent_token_expired`. Appends a `token.create` " +
+            "instance audit entry.",
+          tags: ["Account"],
+        },
+        response: {
+          201: t.Object({
+            id: t.String(),
+            name: t.String(),
+            token: t.String(),
+            tokenPrefix: t.String(),
+            expiresAt: t.Union([t.Number(), t.Null()]),
+          }),
+          401: ERROR_401,
+          403: ERROR_403,
+          422: t.Object({ error: t.Literal("parent_token_expired") }),
+        },
       },
     )
     .get(
@@ -145,7 +208,22 @@ export function meRoutes(deps: MeDeps) {
           createdVia: row.created_via,
         }));
       },
-      { requireAuth: true },
+      {
+        requireAuth: true,
+        detail: {
+          summary: "List personal access tokens",
+          description:
+            "Every PAT the user has ever minted, newest first, including " +
+            "revoked and expired ones (`revokedAt`/`expiresAt` tell them " +
+            "apart). Only display prefixes — never token plaintext.",
+          tags: ["Account"],
+        },
+        response: {
+          200: t.Array(USER_TOKEN_SCHEMA),
+          401: ERROR_401,
+          403: ERROR_403,
+        },
+      },
     )
     .delete(
       "/api/me/tokens/:id",
@@ -175,6 +253,23 @@ export function meRoutes(deps: MeDeps) {
       {
         requireAuth: true,
         params: t.Object({ id: t.String() }),
+        detail: {
+          summary: "Revoke a personal access token",
+          description:
+            "Revokes one of the caller's own PATs (the CLI calls this at " +
+            "`gardens logout` with the very token being revoked — that is " +
+            "allowed). Idempotent: re-revoking returns `revoked: true` " +
+            "without a new audit entry; first revocation appends " +
+            "`token.revoke` to the instance audit stream. 404 for token " +
+            "ids that don't exist or belong to another user.",
+          tags: ["Account"],
+        },
+        response: {
+          200: t.Object({ revoked: t.Boolean() }),
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+        },
       },
     );
 }

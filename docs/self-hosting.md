@@ -162,6 +162,24 @@ trust:
   `docker-compose.yml` and change the app's pinned `REDIS_URL` to
   `redis://:<password>@redis:6379`.
 
+## API documentation endpoint (/docs)
+
+The API serves its own OpenAPI reference: a Scalar UI at `/docs` and the raw
+OpenAPI 3.0 spec at `/docs/json`. Both are **public — no authentication** —
+by design: they document the open-source API surface (routes, schemas, error
+codes) and contain no instance data, secrets, or user information. There is
+no switch to disable them; if you must hide them, block the two paths at
+your reverse proxy.
+
+**Air-gapped deployments:** the `/docs` HTML loads the Scalar viewer
+JavaScript from a CDN (`cdn.jsdelivr.net`) at page load — with no outbound
+internet access the page renders blank. The spec at `/docs/json` is
+generated and served entirely locally and keeps working; point any offline
+OpenAPI viewer at it. (The underlying `@elysiajs/openapi` plugin supports
+overriding the CDN URL via its `scalar.cdn` option, but secret-gardens does
+not currently expose that as configuration — self-hosting the viewer asset
+would require a code change in `apps/api/src/openapi.ts`.)
+
 ## Reverse proxy / TLS
 
 Run secret-gardens behind a TLS-terminating reverse proxy (Caddy, nginx, Traefik) in

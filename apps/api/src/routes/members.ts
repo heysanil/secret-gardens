@@ -4,6 +4,7 @@ import { Elysia, t } from "elysia";
 import { type Auth, principalPlugin } from "../auth";
 import { newId } from "../db";
 import type { AuditLog } from "../redis/audit";
+import { ERROR_401, ERROR_403, ERROR_404 } from "./errorSchemas";
 
 export interface MembersDeps {
   db: Database;
@@ -16,6 +17,14 @@ const ROLE_SCHEMA = t.Union([
   t.Literal("write"),
   t.Literal("read"),
 ]);
+
+const MEMBER_SCHEMA = t.Object({
+  userId: t.String(),
+  name: t.String(),
+  email: t.String(),
+  role: ROLE_SCHEMA,
+  createdAt: t.Number(),
+});
 
 interface MemberRow {
   user_id: string;
@@ -82,7 +91,23 @@ export function membersRoutes(deps: MembersDeps) {
           createdAt: row.created_at,
         }));
       },
-      { requireProject: "read" },
+      {
+        requireProject: "read",
+        detail: {
+          summary: "List project members",
+          description:
+            "Explicit memberships only — instance owners/admins with " +
+            "implicit access do not appear unless they have joined. Any " +
+            "project role may read the list; service tokens get 403/404.",
+          tags: ["Members"],
+        },
+        response: {
+          200: t.Array(MEMBER_SCHEMA),
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+        },
+      },
     )
     .post(
       "/",
@@ -128,6 +153,23 @@ export function membersRoutes(deps: MembersDeps) {
           userId: t.String({ minLength: 1 }),
           role: ROLE_SCHEMA,
         }),
+        detail: {
+          summary: "Add a project member",
+          description:
+            "Grants an existing instance user a project role " +
+            "(`admin`/`write`/`read`). 404 when the user id does not " +
+            "exist; 409 `already_member` when they already have a role " +
+            "(use PATCH to change it). Appends a `member.add` audit " +
+            "entry. Project admins only; user principals only.",
+          tags: ["Members"],
+        },
+        response: {
+          201: MEMBER_SCHEMA,
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+          409: t.Object({ error: t.Literal("already_member") }),
+        },
       },
     )
     .patch(
@@ -162,6 +204,24 @@ export function membersRoutes(deps: MembersDeps) {
       {
         requireProject: "admin",
         body: t.Object({ role: ROLE_SCHEMA }),
+        detail: {
+          summary: "Change a member's role",
+          description:
+            "Reassigns a member's project role. Demoting the **last " +
+            "explicit admin** is refused with 409 `last_admin` — implicit " +
+            "instance-admin access does not count; every project must " +
+            "keep one explicit admin membership. Appends a " +
+            "`member.update` audit entry. Project admins only; user " +
+            "principals only.",
+          tags: ["Members"],
+        },
+        response: {
+          200: t.Object({ userId: t.String(), role: ROLE_SCHEMA }),
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+          409: t.Object({ error: t.Literal("last_admin") }),
+        },
       },
     )
     .delete(
@@ -186,6 +246,24 @@ export function membersRoutes(deps: MembersDeps) {
         );
         return { removed: true };
       },
-      { requireProject: "admin" },
+      {
+        requireProject: "admin",
+        detail: {
+          summary: "Remove a project member",
+          description:
+            "Revokes a user's membership. Removing the **last explicit " +
+            "admin** is refused with 409 `last_admin`. Appends a " +
+            "`member.remove` audit entry. Project admins only; user " +
+            "principals only.",
+          tags: ["Members"],
+        },
+        response: {
+          200: t.Object({ removed: t.Boolean() }),
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+          409: t.Object({ error: t.Literal("last_admin") }),
+        },
+      },
     );
 }

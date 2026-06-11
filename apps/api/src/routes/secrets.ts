@@ -14,6 +14,12 @@ import {
   DecryptFailedError,
   type SecretService,
 } from "../services/secretService";
+import {
+  ERROR_401,
+  ERROR_403,
+  ERROR_404,
+  ERROR_500_DECRYPT,
+} from "./errorSchemas";
 
 export interface SecretsDeps {
   db: Database;
@@ -21,6 +27,42 @@ export interface SecretsDeps {
   audit: AuditLog;
   secretService: SecretService;
 }
+
+const SECRET_ENTRY_SCHEMA = t.Object({
+  key: t.String(),
+  version: t.Number(),
+  updatedAt: t.Number(),
+  updatedBy: t.String(),
+  value: t.Optional(t.String()),
+});
+
+const VERSION_ENTRY_SCHEMA = t.Object({
+  version: t.Number(),
+  op: t.Union([
+    t.Literal("create"),
+    t.Literal("update"),
+    t.Literal("delete"),
+    t.Literal("rollback"),
+  ]),
+  // AuditActorType — "system" never actually writes secret versions, but
+  // the storage type admits it.
+  actorType: t.Union([
+    t.Literal("user"),
+    t.Literal("service_token"),
+    t.Literal("system"),
+  ]),
+  actorId: t.String(),
+  ts: t.Number(),
+  rollbackOf: t.Optional(t.Number()),
+  hasValue: t.Boolean(),
+  value: t.Optional(t.String()),
+});
+
+const WRITE_OP_SCHEMA = t.Union([
+  t.Literal("create"),
+  t.Literal("update"),
+  t.Literal("rollback"),
+]);
 
 /**
  * Secrets routes under /api/projects/:projectId/environments/:envId/secrets.
@@ -93,6 +135,34 @@ export function secretsRoutes(deps: SecretsDeps) {
             minRole: "read",
             serviceAction: "secrets.read",
           },
+          query: t.Object({
+            include_values: t.Optional(
+              t.String({
+                description:
+                  "Set to `true` to decrypt and include every value " +
+                  "(appends a `secrets.read` audit entry).",
+              }),
+            ),
+          }),
+          detail: {
+            summary: "List secrets",
+            description:
+              "Current secrets in the environment (tombstoned keys " +
+              "excluded), sorted by key. Metadata only by default; " +
+              "`?include_values=true` decrypts every value and appends a " +
+              "`secrets.read` audit entry recording the actor and count. " +
+              "Service tokens: allowed with scope `read` or `read_write` " +
+              "when the token covers this environment (`gardens pull/run` " +
+              "use this).",
+            tags: ["Secrets"],
+          },
+          response: {
+            200: t.Object({ secrets: t.Array(SECRET_ENTRY_SCHEMA) }),
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
+            500: ERROR_500_DECRYPT,
+          },
         },
       )
       .get(
@@ -130,6 +200,33 @@ export function secretsRoutes(deps: SecretsDeps) {
           requireProjectAction: {
             minRole: "read",
             serviceAction: "secrets.read",
+          },
+          query: t.Object({
+            include_value: t.Optional(
+              t.String({
+                description:
+                  "Set to `true` to decrypt and include the value " +
+                  "(appends a `secrets.read` audit entry).",
+              }),
+            ),
+          }),
+          detail: {
+            summary: "Get a secret",
+            description:
+              "One current secret. Metadata only by default; " +
+              "`?include_value=true` decrypts the value and appends a " +
+              "`secrets.read` audit entry. 404 when the key has no " +
+              "current value (never existed, or tombstoned by delete). " +
+              "Service tokens: allowed with scope `read` or `read_write` " +
+              "when the token covers this environment.",
+            tags: ["Secrets"],
+          },
+          response: {
+            200: SECRET_ENTRY_SCHEMA,
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
+            500: ERROR_500_DECRYPT,
           },
         },
       )
@@ -208,6 +305,42 @@ export function secretsRoutes(deps: SecretsDeps) {
             secrets: t.Record(t.String(), t.String()),
             prune: t.Optional(t.Boolean()),
           }),
+          detail: {
+            summary: "Bulk upsert secrets",
+            description:
+              "Idempotent bulk write (`gardens push`). Keys whose current " +
+              "value already equals the incoming one are left untouched " +
+              "(no version bump, no audit entry); changed keys get a new " +
+              "version and a `secret.create`/`secret.update` audit entry " +
+              "each. With `prune: true`, current keys absent from the " +
+              "payload are tombstoned (versioned `secret.delete`, " +
+              "reversible via rollback). Max 1000 entries (422 " +
+              "`too_many_secrets`); invalid keys/values are rejected " +
+              "as a whole with 422 `invalid_secrets` naming the " +
+              "offending keys — never their values. Service tokens: " +
+              "requires scope `read_write` covering this environment. " +
+              "Project role `write`+ for users.",
+            tags: ["Secrets"],
+          },
+          response: {
+            200: t.Object({
+              created: t.Array(t.String()),
+              updated: t.Array(t.String()),
+              deleted: t.Array(t.String()),
+              unchanged: t.Number(),
+            }),
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
+            422: t.Union([
+              t.Object({ error: t.Literal("too_many_secrets") }),
+              t.Object({
+                error: t.Literal("invalid_secrets"),
+                keys: t.Array(t.String()),
+              }),
+            ]),
+            500: ERROR_500_DECRYPT,
+          },
         },
       )
       .put(
@@ -248,6 +381,33 @@ export function secretsRoutes(deps: SecretsDeps) {
             serviceAction: "secrets.write",
           },
           body: t.Object({ value: t.String() }),
+          detail: {
+            summary: "Set a secret",
+            description:
+              "Creates or updates one secret (`gardens secrets set`); " +
+              "`op` in the response says which happened. Every write " +
+              "appends a new version (history is append-only) and a " +
+              "`secret.create`/`secret.update` audit entry. Unlike the " +
+              "bulk route, an unchanged value still bumps the version. " +
+              "422 `invalid_key`/`invalid_value` on validation failure. " +
+              "Service tokens: requires scope `read_write` covering this " +
+              "environment. Project role `write`+ for users.",
+            tags: ["Secrets"],
+          },
+          response: {
+            200: t.Object({
+              key: t.String(),
+              version: t.Number(),
+              op: WRITE_OP_SCHEMA,
+            }),
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
+            422: t.Union([
+              t.Object({ error: t.Literal("invalid_key") }),
+              t.Object({ error: t.Literal("invalid_value") }),
+            ]),
+          },
         },
       )
       .delete(
@@ -282,6 +442,24 @@ export function secretsRoutes(deps: SecretsDeps) {
           requireProjectAction: {
             minRole: "write",
             serviceAction: "secrets.write",
+          },
+          detail: {
+            summary: "Delete a secret",
+            description:
+              "Tombstones the key: it disappears from current listings " +
+              "but its history is preserved (history is append-only — " +
+              "the deletion itself is a version, and earlier versions " +
+              "remain roll-back-able). 404 when there is no current " +
+              "value. Appends a `secret.delete` audit entry. Service " +
+              "tokens: requires scope `read_write` covering this " +
+              "environment. Project role `write`+ for users.",
+            tags: ["Secrets"],
+          },
+          response: {
+            200: t.Object({ deleted: t.Boolean(), version: t.Number() }),
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
           },
         },
       )
@@ -325,7 +503,38 @@ export function secretsRoutes(deps: SecretsDeps) {
           }
           return { versions };
         },
-        { requireProject: "read" },
+        {
+          requireProject: "read",
+          query: t.Object({
+            include_values: t.Optional(
+              t.String({
+                description:
+                  "Set to `true` to decrypt historical values — project " +
+                  "admins only (403 otherwise).",
+              }),
+            ),
+          }),
+          detail: {
+            summary: "List a secret's versions",
+            description:
+              "Full append-only history for one key, newest first — " +
+              "including deletion tombstones (`hasValue: false`) and " +
+              "rollback entries (`rollbackOf`). Metadata for any project " +
+              "role; `?include_values=true` is **project-admin-only** " +
+              "(403 `forbidden`): old versions may hold values a " +
+              "since-rotated credential replaced. Value reads append a " +
+              "`secrets.read` audit entry with the decrypted count. " +
+              "User principals only — service tokens never read history.",
+            tags: ["Versions"],
+          },
+          response: {
+            200: t.Object({ versions: t.Array(VERSION_ENTRY_SCHEMA) }),
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
+            500: ERROR_500_DECRYPT,
+          },
+        },
       )
       .post(
         "/:key/rollback",
@@ -369,6 +578,29 @@ export function secretsRoutes(deps: SecretsDeps) {
             serviceAction: "secrets.write",
           },
           body: t.Object({ toVersion: t.Integer({ minimum: 1 }) }),
+          detail: {
+            summary: "Roll back a secret",
+            description:
+              "Appends a NEW version that reuses the target version's " +
+              "ciphertext verbatim — history is never rewritten, and the " +
+              "rollback itself is recorded as an `op: rollback` version " +
+              "plus a `secret.rollback` audit entry. Rolling back to a " +
+              "deletion tombstone is refused with 400 " +
+              "`cannot_rollback_to_delete` (delete the key instead); " +
+              "unknown versions 404. Service tokens: requires scope " +
+              "`read_write` covering this environment. Project role " +
+              "`write`+ for users.",
+            tags: ["Versions"],
+          },
+          response: {
+            200: t.Object({ version: t.Number() }),
+            400: t.Object({
+              error: t.Literal("cannot_rollback_to_delete"),
+            }),
+            401: ERROR_401,
+            403: ERROR_403,
+            404: ERROR_404,
+          },
         },
       )
   );

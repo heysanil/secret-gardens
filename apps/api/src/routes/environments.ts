@@ -4,6 +4,7 @@ import { type Auth, principalPlugin } from "../auth";
 import { newId } from "../db";
 import type { AuditLog } from "../redis/audit";
 import type { SecretStore } from "../redis/secretStore";
+import { ERROR_401, ERROR_403, ERROR_404 } from "./errorSchemas";
 
 export interface EnvironmentsDeps {
   db: Database;
@@ -20,6 +21,13 @@ interface EnvironmentRow {
   slug: string;
   position: number;
 }
+
+const ENVIRONMENT_SCHEMA = t.Object({
+  id: t.String(),
+  name: t.String(),
+  slug: t.String(),
+  position: t.Number(),
+});
 
 /**
  * Environment CRUD — project admins only. Slugs are immutable after
@@ -85,6 +93,26 @@ export function environmentsRoutes(deps: EnvironmentsDeps) {
           name: t.String({ minLength: 1, maxLength: 50 }),
           slug: t.String({ minLength: 1, maxLength: 32 }),
         }),
+        detail: {
+          summary: "Create an environment",
+          description:
+            "Adds an environment to the project, appended at the end of " +
+            "the ordering. Slugs (lowercase letters, digits, hyphens; max " +
+            "32 chars) are **immutable after creation** — they are pinned " +
+            "by CLI configs (`.gardens.json`). 422 `invalid_slug` / 409 " +
+            "`duplicate_slug` on bad or taken slugs. Appends an " +
+            "`env.create` audit entry. Project admins only; user " +
+            "principals only.",
+          tags: ["Environments"],
+        },
+        response: {
+          201: ENVIRONMENT_SCHEMA,
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+          409: t.Object({ error: t.Literal("duplicate_slug") }),
+          422: t.Object({ error: t.Literal("invalid_slug") }),
+        },
       },
     )
     .patch(
@@ -125,6 +153,22 @@ export function environmentsRoutes(deps: EnvironmentsDeps) {
           name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
           position: t.Optional(t.Integer({ minimum: 0 })),
         }),
+        detail: {
+          summary: "Update an environment",
+          description:
+            "Renames an environment and/or moves its position in the " +
+            "ordering. Slugs cannot be changed. Appends an `env.update` " +
+            "audit entry naming the changed fields; a no-op body skips " +
+            "both the write and the audit entry. Project admins only; " +
+            "user principals only.",
+          tags: ["Environments"],
+        },
+        response: {
+          200: ENVIRONMENT_SCHEMA,
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+        },
       },
     )
     .delete(
@@ -147,6 +191,23 @@ export function environmentsRoutes(deps: EnvironmentsDeps) {
         );
         return { deleted: true };
       },
-      { requireProject: "admin" },
+      {
+        requireProject: "admin",
+        detail: {
+          summary: "Delete an environment",
+          description:
+            "Deletes the environment and **all of its secrets and version " +
+            "history** (ciphertext removed from Redis). Irreversible. " +
+            "Appends an `env.delete` audit entry. Project admins only; " +
+            "user principals only.",
+          tags: ["Environments"],
+        },
+        response: {
+          200: t.Object({ deleted: t.Boolean() }),
+          401: ERROR_401,
+          403: ERROR_403,
+          404: ERROR_404,
+        },
+      },
     );
 }
