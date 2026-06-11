@@ -152,6 +152,7 @@ Elysia's standard 422 validation shape instead. Codes in use:
 | \`cannot_rollback_to_delete\` | 400 | Rollback target version is a deletion tombstone |
 | \`parent_token_expired\` | 422 | The PAT used to mint a new PAT has already expired |
 | \`decrypt_failed\` | 500 | A stored ciphertext failed to decrypt (see server logs) |
+| \`internal_error\` | 500 | Unexpected server-side failure; the operation was rolled back (see server logs) |
 
 The 404-vs-403 rule is deliberate: non-members (and service tokens probing
 foreign projects) always get \`404 not_found\`, never \`403\`, so the API

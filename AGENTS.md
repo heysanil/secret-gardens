@@ -203,7 +203,7 @@ Error codes in use (machine `error` field): `unauthorized`, `forbidden`,
 `invalid_value`, `invalid_secrets`, `too_many_secrets`,
 `invalid_environment_ids`, `invalid_action`, `invalid_cursor`,
 `invalid_limit`, `cannot_rollback_to_delete`, `parent_token_expired`,
-`decrypt_failed`.
+`decrypt_failed`, `internal_error`.
 
 ## 6. Security invariants (must never regress)
 

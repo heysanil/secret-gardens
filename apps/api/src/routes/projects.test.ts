@@ -494,8 +494,9 @@ describe("POST /api/projects/:projectId/rotate-dek", () => {
 describe("POST /api/projects DEK creation failure", () => {
   /**
    * Builds a parallel app over the same db/auth/audit as `ctx`, but with a
-   * dekService whose createProjectDek always throws, and captures whatever
-   * error reaches Elysia's error hook.
+   * dekService whose createProjectDek always throws. The error hook proves
+   * the failure is HANDLED in the route (our JSON 500 contract) rather
+   * than rethrown into Elysia's default error rendering.
    */
   function buildFailingApp(ctx: TestApp, db: Database) {
     const secretStore = createSecretStore(redis);
@@ -529,20 +530,39 @@ describe("POST /api/projects DEK creation failure", () => {
     return { app, captured };
   }
 
-  test("deletes the project row, returns 500, and surfaces the DEK error", async () => {
+  test("deletes the project row and returns a handled 500 internal_error", async () => {
     const ctx = await createTestApp(redis);
     const owner = await signUpUser(ctx.app, "owner");
     const { app, captured } = buildFailingApp(ctx, ctx.db);
 
-    const res = await app.handle(
-      new Request("http://localhost/api/projects", {
-        method: "POST",
-        headers: { "content-type": "application/json", cookie: owner.cookie },
-        body: JSON.stringify({ name: "Doomed", slug: "doomed" }),
-      }),
-    );
-    expect(res.status).toBe(500);
-    expect((captured.error as Error).message).toBe("dek wrap failed (test)");
+    const errorSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await app.handle(
+        new Request("http://localhost/api/projects", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: owner.cookie,
+          },
+          body: JSON.stringify({ name: "Doomed", slug: "doomed" }),
+        }),
+      );
+      // The failure is handled in-route: our JSON error contract, not
+      // Elysia's default error rendering — nothing reaches the error hook.
+      expect(res.status).toBe(500);
+      expect(res.headers.get("content-type")).toContain("application/json");
+      expect(await res.json()).toEqual({ error: "internal_error" });
+      expect(captured.error).toBeUndefined();
+
+      // The ORIGINAL DEK error was logged with the project id.
+      const logged = errorSpy.mock.calls.find((call) =>
+        String(call[0]).includes("could not provision a DEK"),
+      );
+      expect(logged).toBeDefined();
+      expect((logged?.[1] as Error).message).toBe("dek wrap failed (test)");
+    } finally {
+      errorSpy.mockRestore();
+    }
 
     // Compensating delete removed the row (and, via cascade, envs/membership).
     expect(
@@ -558,7 +578,7 @@ describe("POST /api/projects DEK creation failure", () => {
     ctx.close();
   });
 
-  test("a failing compensating delete is logged and does not mask the DEK error", async () => {
+  test("a failing compensating delete logs the orphan and still returns the handled 500", async () => {
     const ctx = await createTestApp(redis);
     const owner = await signUpUser(ctx.app, "owner");
 
@@ -592,8 +612,10 @@ describe("POST /api/projects DEK creation failure", () => {
         }),
       );
       expect(res.status).toBe(500);
-      // The ORIGINAL DEK error surfaces — not the cleanup error.
-      expect((captured.error as Error).message).toBe("dek wrap failed (test)");
+      expect(await res.json()).toEqual({ error: "internal_error" });
+      // Handled in-route: nothing reaches the error hook even when the
+      // compensating delete ALSO fails.
+      expect(captured.error).toBeUndefined();
 
       // The cleanup failure was logged with the orphaned project id.
       const orphan = ctx.db
@@ -602,12 +624,19 @@ describe("POST /api/projects DEK creation failure", () => {
         )
         .get();
       expect(orphan).not.toBeNull();
-      const logged = errorSpy.mock.calls.find((call) =>
+      const cleanupLog = errorSpy.mock.calls.find((call) =>
         String(call[0]).includes("failed to clean up project"),
       );
-      expect(logged).toBeDefined();
-      expect(String(logged?.[0])).toContain(orphan?.id as string);
-      expect((logged?.[1] as Error).message).toBe("cleanup failed (test)");
+      expect(cleanupLog).toBeDefined();
+      expect(String(cleanupLog?.[0])).toContain(orphan?.id as string);
+      expect((cleanupLog?.[1] as Error).message).toBe("cleanup failed (test)");
+
+      // …and the ORIGINAL DEK error was logged too — not masked.
+      const dekLog = errorSpy.mock.calls.find((call) =>
+        String(call[0]).includes("could not provision a DEK"),
+      );
+      expect(dekLog).toBeDefined();
+      expect((dekLog?.[1] as Error).message).toBe("dek wrap failed (test)");
     } finally {
       errorSpy.mockRestore();
     }

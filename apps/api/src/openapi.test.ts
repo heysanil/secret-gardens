@@ -134,11 +134,34 @@ describe("openapi docs", () => {
     expect(operations).toBeGreaterThan(25);
   });
 
-  test("public routes opt out of the global security requirement", async () => {
+  test("exactly the PUBLIC_PATHS routes opt out of the global security requirement", async () => {
+    // The full public surface. /docs and /docs/json are public too but
+    // carry `detail.hide` and never appear in the spec — if they ever do,
+    // they belong here. Adding a public route without `security: []` (or
+    // without listing it here) fails this test.
+    const PUBLIC_PATHS = new Set(["/api/health", "/api/bootstrap"]);
+
     const spec = await fetchSpec();
-    expect(spec.paths["/api/health"]?.get?.security).toEqual([]);
-    expect(spec.paths["/api/bootstrap"]?.get?.security).toEqual([]);
-    // Spot-check an authenticated route: no override → global default.
-    expect(spec.paths["/api/me"]?.get?.security).toBeUndefined();
+    for (const path of PUBLIC_PATHS) {
+      expect(spec.paths[path], `${path} missing from the spec`).toBeDefined();
+    }
+    for (const [path, methods] of Object.entries(spec.paths)) {
+      for (const [method, op] of Object.entries(methods)) {
+        const at = `${method.toUpperCase()} ${path}`;
+        if (PUBLIC_PATHS.has(path)) {
+          expect(
+            op.security,
+            `${at} is public and must declare security: []`,
+          ).toEqual([]);
+        } else {
+          // No override → inherits the global bearer/cookie requirement.
+          expect(
+            op.security,
+            `${at} declares a security override — public routes must be ` +
+              "added to PUBLIC_PATHS deliberately",
+          ).toBeUndefined();
+        }
+      }
+    }
   });
 });

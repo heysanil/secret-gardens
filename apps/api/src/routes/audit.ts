@@ -98,8 +98,9 @@ export function auditRoutes(deps: AuditDeps) {
             "cursor-paginated (see the Pagination section of this " +
             "document). Entries record the action (e.g. `secret.update`, " +
             "`member.add`, `dek.rotate`), the actor (user or service " +
-            "token), a timestamp, and per-action string fields — keys, " +
-            "ids, and counts, **never secret values**. Any project role " +
+            "token), a timestamp, and per-action string fields flattened " +
+            "onto the entry itself (e.g. `envId`, `key`, `version`) — " +
+            "keys, ids, and counts, **never secret values**. Any project " +
             "may read it; service tokens get 403/404. Filters: `action` " +
             "(422 `invalid_action` for unknown values), `envId`, `limit` " +
             "(1–100, 422 `invalid_limit`), `cursor` (422 `invalid_cursor` " +
@@ -118,6 +119,12 @@ export function auditRoutes(deps: AuditDeps) {
                         type: "array",
                         items: {
                           type: "object",
+                          description:
+                            "Per-action fields (e.g. envId, key, version, " +
+                            "userId — keys/ids/counts, never secret " +
+                            "values) are flattened onto the entry as " +
+                            "additional string properties alongside the " +
+                            "fixed ones below.",
                           properties: {
                             id: {
                               type: "string",
@@ -131,14 +138,8 @@ export function auditRoutes(deps: AuditDeps) {
                             },
                             actorId: { type: "string" },
                             ts: { type: "number" },
-                            fields: {
-                              type: "object",
-                              additionalProperties: { type: "string" },
-                              description:
-                                "Per-action details (keys/ids/counts — " +
-                                "never secret values).",
-                            },
                           },
+                          additionalProperties: { type: "string" },
                         },
                       },
                       nextCursor: {

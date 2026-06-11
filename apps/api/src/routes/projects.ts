@@ -245,7 +245,9 @@ export function projectsRoutes(deps: ProjectsDeps) {
           // DEK creation deliberately happens AFTER the commit: a wrap/insert
           // failure must not poison the surrounding transaction, so instead
           // we compensate by deleting the project row (cascade removes the
-          // envs and membership) and rethrowing.
+          // envs and membership) and return a handled 500 in our JSON error
+          // shape — rethrowing would surface Elysia's default error
+          // rendering, not the API's `{error}` contract.
           try {
             dekService.createProjectDek(projectId);
           } catch (err) {
@@ -260,7 +262,11 @@ export function projectsRoutes(deps: ProjectsDeps) {
                 cleanupErr,
               );
             }
-            throw err;
+            console.error(
+              `project creation failed: could not provision a DEK for ${projectId}:`,
+              err,
+            );
+            return status(500, { error: "internal_error" });
           }
 
           await audit.appendAudit(
@@ -302,7 +308,9 @@ export function projectsRoutes(deps: ProjectsDeps) {
               "hyphens; 422 `invalid_slug` when underivable, 409 " +
               "`duplicate_slug` when taken). Any signed-in user may create " +
               "projects. Appends `project.create` audit entries to both the " +
-              "project and instance streams.",
+              "project and instance streams. If DEK provisioning fails, the " +
+              "half-created project is rolled back and 500 `internal_error` " +
+              "is returned (details in the server logs).",
             tags: ["Projects"],
           },
           response: {
@@ -311,6 +319,7 @@ export function projectsRoutes(deps: ProjectsDeps) {
             403: ERROR_403,
             409: t.Object({ error: t.Literal("duplicate_slug") }),
             422: t.Object({ error: t.Literal("invalid_slug") }),
+            500: t.Object({ error: t.Literal("internal_error") }),
           },
         },
       )

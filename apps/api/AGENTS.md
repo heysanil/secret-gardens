@@ -30,6 +30,8 @@ listening, no env reads — so tests and Eden type extraction can import it.
   `API_VERSION` is hardcoded and test-pinned to package.json.
 - `src/routes/errorSchemas.ts` — shared 401/403/404/500 response schemas
   for route `response` maps.
+- `src/elysiaBehavior.test.ts` — characterization tests pinning elysia's
+  response-schema runtime semantics (see the invariant below).
 - `src/staticWeb.ts` — serves the built SPA; route-precedence-sensitive
   (root AGENTS.md §8).
 - `test/testApp.ts` — integration harness (in-memory SQLite + real Redis);
@@ -41,17 +43,29 @@ listening, no env reads — so tests and Eden type extraction can import it.
 - **Every route MUST ship `detail` metadata** — `summary`, a genuinely
   useful `description` (semantics, side effects, error cases), `tags` from
   the tag set in `src/openapi.ts`, and `security: []` for public routes.
-  `src/openapi.test.ts` fails any operation missing them.
-- **Runtime `response` schemas are validated AND status-rewriting.** When a
-  route declares a `response` map, Elysia (1.4) runtime-validates every
-  status that IS declared (mismatch → 422), and a handler `status(...)` for
-  an UNdeclared status is silently rewritten to HTTP 200 — so a route with
-  a response map must declare every status its handler can return (tsc
-  enforces this too). Guard/macro early-returns and `onError` responses
-  bypass response validation entirely. For shapes a schema can't honestly
-  express (unions on principal type, free-form audit fields), use doc-only
-  `detail.responses` instead — but never both on one route: a runtime map
-  resets `detail.responses` in the generated spec.
+  `src/openapi.test.ts` fails any operation missing them, and its
+  `PUBLIC_PATHS` allowlist must be updated in the same change when a route
+  is made public — both directions are asserted (public without the
+  override, and an override without an allowlist entry, each fail).
+- **Runtime `response` schemas: validated, and conditionally
+  status-rewriting** (observed on elysia 1.4.28; pinned by the
+  characterization tests in `src/elysiaBehavior.test.ts` — if an elysia
+  upgrade fails them, re-verify and rewrite this invariant). DECLARED
+  statuses are runtime-validated (mismatched body → 422 response-validation
+  error) and keep their codes. An UNDECLARED status returned via
+  `status(...)` keeps its code — EXCEPT when the map declares only a 200
+  (single-entry `{200}` map, or the shorthand `response: schema`) AND the
+  handler source never references `set`: then the response is **silently
+  rewritten to HTTP 200** with the body kept (Elysia's AOT inspects the
+  handler source for `set` usage). Multi-status maps always preserve
+  status. Guard/macro early-returns, thrown errors, and `onError` responses
+  bypass response validation entirely and keep their statuses. In practice:
+  declare every status a handler can produce (tsc rejects undeclared
+  `status()` returns; keep `set.status` writes pointed at declared
+  statuses, and never cast around the response type). For shapes a schema
+  can't honestly express (unions on principal type, free-form audit
+  fields), use doc-only `detail.responses` instead — but never both on one
+  route: a runtime map resets `detail.responses` in the generated spec.
 - **Guards only.** Every route's authz is one of `requireAuth`,
   `requireInstanceAdmin`, `requireProject: minRole`, or
   `requireProjectAction: {minRole, serviceAction}`. Never inline permission
