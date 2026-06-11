@@ -18,9 +18,11 @@ const KEK_CHECK_CONSTANT = createHash("sha256")
   .digest();
 
 /** Plays the role of projectId in wrapDek's AAD (`safe-dek:kek-check`). */
-const KEK_CHECK_AAD_ID = "kek-check";
+export const KEK_CHECK_AAD_ID = "kek-check";
 
-const SETTINGS_KEY = "kek_check";
+/** instance_settings key holding the wrapped check constant. */
+export const KEK_CHECK_SETTINGS_KEY = "kek_check";
+const SETTINGS_KEY = KEK_CHECK_SETTINGS_KEY;
 
 /** Thrown when the loaded master key cannot be verified against the database. */
 export class KekCheckError extends Error {

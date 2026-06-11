@@ -10,6 +10,7 @@ import { openDb, runMigrations } from "./db";
 import { createAuditLog } from "./redis/audit";
 import { createRedis } from "./redis/client";
 import { ensureKekCheck } from "./services/kekCheck";
+import { mountWebDist } from "./staticWeb";
 
 export type { App } from "./app";
 
@@ -28,6 +29,9 @@ async function main(): Promise<void> {
   await redis.connect();
 
   const app = createApp({ db, redis, config, auth, audit });
+  if (config.webDistPath !== null) {
+    await mountWebDist(app, config.webDistPath);
+  }
   app.listen(config.port);
   console.log(
     `safe api listening on port ${config.port} ` +

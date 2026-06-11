@@ -13,6 +13,7 @@
     "lint": "biome check ."
   },
   "dependencies": {
+    "@elysiajs/static": "1.4.10",
     "@safe/crypto": "workspace:*",
     "@safe/shared": "workspace:*",
     "better-auth": "1.6.16",

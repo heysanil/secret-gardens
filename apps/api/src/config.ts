@@ -33,6 +33,12 @@ export interface Config {
   additionalOrigins: string[];
   /** XADD MAXLEN ~ threshold for audit streams; null = untrimmed. */
   auditMaxLen: number | null;
+  /**
+   * Directory containing the built web UI (SAFE_WEB_DIST). When set, the
+   * API serves it at / with an SPA fallback; null (the default) disables
+   * static serving entirely (development — Vite serves the web app).
+   */
+  webDistPath: string | null;
 }
 
 const DEFAULT_PORT = 3000;
@@ -176,5 +182,9 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     google,
     additionalOrigins: parseAdditionalOrigins(env.SAFE_ADDITIONAL_ORIGINS),
     auditMaxLen,
+    webDistPath:
+      env.SAFE_WEB_DIST === undefined || env.SAFE_WEB_DIST === ""
+        ? null
+        : env.SAFE_WEB_DIST,
   };
 }

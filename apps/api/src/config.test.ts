@@ -24,6 +24,7 @@ describe("loadConfig", () => {
     expect(config.github).toBeNull();
     expect(config.google).toBeNull();
     expect(config.additionalOrigins).toEqual([]);
+    expect(config.webDistPath).toBeNull();
   });
 
   test("honors explicit values", () => {
@@ -34,12 +35,19 @@ describe("loadConfig", () => {
       SAFE_DB_PATH: "/data/safe.db",
       SAFE_PUBLIC_URL: "https://safe.example.com",
       SAFE_AUDIT_MAXLEN: "10000",
+      SAFE_WEB_DIST: "/app/apps/web/dist",
     });
     expect(config.port).toBe(8080);
     expect(config.redisUrl).toBe("redis://redis:6379");
     expect(config.dbPath).toBe("/data/safe.db");
     expect(config.publicUrl).toBe("https://safe.example.com");
     expect(config.auditMaxLen).toBe(10000);
+    expect(config.webDistPath).toBe("/app/apps/web/dist");
+  });
+
+  test("treats an empty SAFE_WEB_DIST as disabled", () => {
+    const config = loadConfig({ ...baseEnv, SAFE_WEB_DIST: "" });
+    expect(config.webDistPath).toBeNull();
   });
 
   describe("SAFE_MASTER_KEY validation", () => {
