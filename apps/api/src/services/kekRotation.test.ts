@@ -54,6 +54,15 @@ function allKeyRows(): KeyRow[] {
     .all();
 }
 
+/** Every column of every row — for byte-exact rollback assertions. */
+function fullKeyRows(): Record<string, unknown>[] {
+  return db
+    .query<Record<string, unknown>, []>(
+      "SELECT * FROM project_keys ORDER BY project_id, version",
+    )
+    .all();
+}
+
 function kekCheckValue(): string {
   const row = db
     .query<{ value: string }, [string]>(
@@ -166,6 +175,39 @@ describe("rotateKek", () => {
     expect(allKeyRows()).toEqual(rowsBefore);
     expect(kekCheckValue()).toBe(checkBefore);
     expect(() => ensureKekCheck(db, oldKey)).not.toThrow();
+  });
+
+  test("corrupted row ciphertext aborts as KekRotationError with full rollback", () => {
+    seedProjects();
+    // Corrupt prj_b v1's auth tag while keeping its kek_id intact: the
+    // unwrap fails (DekUnwrapError) rather than the kek_id pre-check.
+    db.run(
+      "UPDATE project_keys SET wrap_tag = ? WHERE project_id = 'prj_b' AND version = 1",
+      [Buffer.alloc(16).toString("base64")],
+    );
+    const rowsBefore = fullKeyRows();
+    const checkBefore = kekCheckValue();
+
+    // The controlled error type — never a raw DekUnwrapError stack.
+    expect(() => rotateKek(db, oldKey, newKey)).toThrow(KekRotationError);
+    expect(() => rotateKek(db, oldKey, newKey)).toThrow(/corrupted/);
+
+    // Transaction rolled back: every row (including any processed before
+    // the corrupted one) is byte-identical, kek_check untouched.
+    expect(fullKeyRows()).toEqual(rowsBefore);
+    expect(kekCheckValue()).toBe(checkBefore);
+  });
+
+  test("corrupted kek_check aborts as KekRotationError with full rollback", () => {
+    seedProjects();
+    db.run("UPDATE instance_settings SET value = ? WHERE key = ?", [
+      "{not json",
+      KEK_CHECK_SETTINGS_KEY,
+    ]);
+    const rowsBefore = fullKeyRows();
+
+    expect(() => rotateKek(db, oldKey, newKey)).toThrow(KekRotationError);
+    expect(fullKeyRows()).toEqual(rowsBefore);
   });
 
   test("refuses to run against a database that was never booted", () => {

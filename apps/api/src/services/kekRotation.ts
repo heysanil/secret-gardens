@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import {
+  CryptoError,
   type MasterKey,
   type PackedWrappedDek,
   packWrappedDek,
@@ -42,7 +43,8 @@ interface ProjectKeyRow {
  * still decrypt historical secret versions) from `oldKey` to `newKey`, and
  * rewrites the instance_settings kek_check under the new key. Everything
  * runs in ONE SQLite transaction: any row wrapped with a KEK that is
- * neither `oldKey` nor `newKey` aborts the whole run with no partial state.
+ * neither `oldKey` nor `newKey` — or whose ciphertext fails to unwrap —
+ * aborts the whole run as a KekRotationError with no partial state.
  *
  * Rows already wrapped with `newKey` are skipped, so an interrupted run can
  * simply be re-executed.
@@ -56,18 +58,6 @@ export function rotateKek(
   oldKey: MasterKey,
   newKey: MasterKey,
 ): KekRotationResult {
-  const checkRow = db
-    .query<{ value: string }, [string]>(
-      "SELECT value FROM instance_settings WHERE key = ?",
-    )
-    .get(KEK_CHECK_SETTINGS_KEY);
-  if (checkRow === null) {
-    throw new KekRotationError(
-      "instance_settings has no kek_check row — this database has never been " +
-        "booted by the safe API, so there is nothing to rotate.",
-    );
-  }
-
   let result: KekRotationResult = {
     rewrapped: 0,
     skipped: 0,
@@ -75,6 +65,20 @@ export function rotateKek(
   };
 
   const run = db.transaction(() => {
+    // Read kek_check inside the transaction: a read taken before BEGIN
+    // would not be part of this snapshot and could go stale under races.
+    const checkRow = db
+      .query<{ value: string }, [string]>(
+        "SELECT value FROM instance_settings WHERE key = ?",
+      )
+      .get(KEK_CHECK_SETTINGS_KEY);
+    if (checkRow === null) {
+      throw new KekRotationError(
+        "instance_settings has no kek_check row — this database has never been " +
+          "booted by the safe API, so there is nothing to rotate.",
+      );
+    }
+
     let rewrapped = 0;
     let skipped = 0;
 
@@ -106,16 +110,29 @@ export function rotateKek(
             "Aborting with no changes.",
         );
       }
-      const dek = unwrapDek(
-        oldKey,
-        unpackWrappedDek({
-          wrapped: row.wrapped_dek,
-          nonce: row.wrap_nonce,
-          tag: row.wrap_tag,
-          kekId: row.kek_id,
-        }),
-        row.project_id,
-      );
+      let dek: Buffer;
+      try {
+        dek = unwrapDek(
+          oldKey,
+          unpackWrappedDek({
+            wrapped: row.wrapped_dek,
+            nonce: row.wrap_nonce,
+            tag: row.wrap_tag,
+            kekId: row.kek_id,
+          }),
+          row.project_id,
+        );
+      } catch (err) {
+        if (err instanceof CryptoError) {
+          throw new KekRotationError(
+            `project_keys row ${row.id} (project ${row.project_id}, ` +
+              `version ${row.version}, ${row.status}) failed to unwrap with ` +
+              "the current key — the stored ciphertext may be corrupted. " +
+              `Aborting with no changes. (${err.message})`,
+          );
+        }
+        throw err;
+      }
       const packed = packWrappedDek(wrapDek(newKey, dek, row.project_id));
       dek.fill(0); // Never cached here — safe to zero after re-wrapping.
       update.run(
@@ -129,7 +146,15 @@ export function rotateKek(
     }
 
     // kek_check: same neither-key abort, same skip-if-already-new logic.
-    const packedCheck = JSON.parse(checkRow.value) as PackedWrappedDek;
+    let packedCheck: PackedWrappedDek;
+    try {
+      packedCheck = JSON.parse(checkRow.value) as PackedWrappedDek;
+    } catch (err) {
+      throw new KekRotationError(
+        "instance_settings kek_check cannot be parsed — the database may be " +
+          `damaged. Aborting with no changes. (${(err as Error).message})`,
+      );
+    }
     let kekCheck: KekRotationResult["kekCheck"] = "already-current";
     if (packedCheck.kekId !== newKey.kekId) {
       if (packedCheck.kekId !== oldKey.kekId) {
@@ -139,11 +164,23 @@ export function rotateKek(
             `new key (${newKey.kekId}). Aborting with no changes.`,
         );
       }
-      const constant = unwrapDek(
-        oldKey,
-        unpackWrappedDek(packedCheck),
-        KEK_CHECK_AAD_ID,
-      );
+      let constant: Buffer;
+      try {
+        constant = unwrapDek(
+          oldKey,
+          unpackWrappedDek(packedCheck),
+          KEK_CHECK_AAD_ID,
+        );
+      } catch (err) {
+        if (err instanceof CryptoError) {
+          throw new KekRotationError(
+            "instance_settings kek_check failed to unwrap with the current " +
+              "key — the stored value may be corrupted. Aborting with no " +
+              `changes. (${err.message})`,
+          );
+        }
+        throw err;
+      }
       const rewrapping = packWrappedDek(
         wrapDek(newKey, constant, KEK_CHECK_AAD_ID),
       );

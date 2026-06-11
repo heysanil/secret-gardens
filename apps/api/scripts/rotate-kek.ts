@@ -18,7 +18,12 @@
  *   SAFE_DB_PATH=./data/safe.db bun apps/api/scripts/rotate-kek.ts
  */
 import { existsSync } from "node:fs";
-import { loadMasterKey, type MasterKey, MasterKeyError } from "@safe/crypto";
+import {
+  CryptoError,
+  loadMasterKey,
+  type MasterKey,
+  MasterKeyError,
+} from "@safe/crypto";
 import { openDb } from "../src/db";
 import { KekRotationError, rotateKek } from "../src/services/kekRotation";
 
@@ -54,7 +59,10 @@ let result: ReturnType<typeof rotateKek>;
 try {
   result = rotateKek(db, oldKey, newKey);
 } catch (err) {
-  if (err instanceof KekRotationError) {
+  // rotateKek wraps crypto failures in KekRotationError; the CryptoError
+  // arm is a safety net so no key/ciphertext problem ever escapes as a
+  // raw stack trace.
+  if (err instanceof KekRotationError || err instanceof CryptoError) {
     fail(err.message);
   }
   throw err;
