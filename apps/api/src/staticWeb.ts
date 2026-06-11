@@ -43,6 +43,11 @@ export async function mountWebDist(app: App, distPath: string): Promise<void> {
       assets: distPath,
       prefix: "/",
       indexHTML: true,
+      // Keep the dynamic wildcard route in production too (the plugin flips
+      // to per-file static routes under NODE_ENV=production): without the
+      // wildcard, unknown paths bypass the NOT_FOUND error hook above and
+      // the SPA fallback never fires.
+      alwaysStatic: false,
     }),
   );
 }
