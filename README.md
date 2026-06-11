@@ -98,6 +98,10 @@ Note: the deployment stack (`docker compose up`) and the test Redis
 give the test stack its own project: `docker compose -p safe-test -f
 compose.test.yml up -d` (tests connect to :6380 either way).
 
+Adding a workspace? `docker/Dockerfile` copies every workspace's
+`package.json` explicitly (in both stages) — add the new manifest there
+too, or the image build fails at `bun install --frozen-lockfile`.
+
 ## Documentation
 
 - [docs/self-hosting.md](docs/self-hosting.md) — env vars, backup & restore,

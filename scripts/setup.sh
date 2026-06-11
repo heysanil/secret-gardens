@@ -80,15 +80,15 @@ cat > "$env_file" <<EOF
 # Used by docker-compose.yml. Keep this file out of version control.
 
 # Master encryption key (KEK). Every project key is wrapped with it.
-SAFE_MASTER_KEY=$master_key
+SAFE_MASTER_KEY="$master_key"
 
 # better-auth signing secret (sessions, cookies).
-BETTER_AUTH_SECRET=$auth_secret
+BETTER_AUTH_SECRET="$auth_secret"
 
 # Public URL users reach this instance at. Must match the address in the
 # browser, or sign-in cookies and OAuth callbacks will fail.
-SAFE_PUBLIC_URL=$url
-BETTER_AUTH_URL=$url
+SAFE_PUBLIC_URL="$url"
+BETTER_AUTH_URL="$url"
 EOF
 chmod 600 "$env_file"
 

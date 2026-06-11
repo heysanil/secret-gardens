@@ -8,6 +8,11 @@ WORKDIR /app
 
 # Workspace manifests first so `bun install` layers cache independently of
 # source changes.
+#
+# ADDING A WORKSPACE? Add its package.json COPY here AND in the runtime
+# stage below. These lists must mirror `workspaces` in package.json — a
+# missing manifest fails `bun install --frozen-lockfile` with an opaque
+# lockfile error.
 COPY package.json bun.lock bunfig.toml turbo.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/cli/package.json apps/cli/
@@ -30,7 +35,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Full workspace source — the API runs straight from TypeScript under Bun.
-# (e2e/package.json only satisfies the lockfile's workspace set.)
+#
+# ADDING A WORKSPACE? Add its package.json COPY here too (see the build
+# stage above) — `bun install --frozen-lockfile` needs every workspace
+# manifest present. e2e/package.json (and apps/web's) exist only to
+# satisfy the lockfile's workspace set.
 COPY package.json bun.lock bunfig.toml turbo.json tsconfig.base.json ./
 COPY apps/api apps/api
 COPY apps/cli apps/cli
