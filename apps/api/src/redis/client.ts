@@ -1,4 +1,4 @@
-import { RedisClient } from "bun";
+import { RedisClient, type RedisOptions } from "bun";
 
 /**
  * The subset of Bun's RedisClient that the storage layer uses. Services and
@@ -15,6 +15,9 @@ export interface RedisLike {
   hkeys(key: string): Promise<string[]>;
 }
 
-export function createRedis(url: string): RedisClient {
-  return new RedisClient(url, { autoReconnect: true });
+export function createRedis(
+  url: string,
+  options: RedisOptions = {},
+): RedisClient {
+  return new RedisClient(url, { autoReconnect: true, ...options });
 }

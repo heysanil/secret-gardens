@@ -23,4 +23,18 @@ export const AUDIT_ACTIONS = [
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
+/**
+ * The subset of AUDIT_ACTIONS that can appear in a per-project audit stream.
+ * auth.login, auth.failed_login and kek.rotate are instance-only — they are
+ * only ever appended to the instance stream — so project-scoped filters
+ * should not offer them. AUDIT_ACTIONS remains the full vocabulary.
+ */
+export const PROJECT_AUDIT_ACTIONS: readonly AuditAction[] =
+  AUDIT_ACTIONS.filter(
+    (action) =>
+      action !== "auth.login" &&
+      action !== "auth.failed_login" &&
+      action !== "kek.rotate",
+  );
+
 export type AuditActorType = "user" | "service_token" | "system";

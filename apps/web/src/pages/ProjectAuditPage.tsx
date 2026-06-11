@@ -1,4 +1,4 @@
-import { AUDIT_ACTIONS } from "@safe/shared";
+import { PROJECT_AUDIT_ACTIONS } from "@safe/shared";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useOutletContext } from "react-router";
@@ -97,7 +97,7 @@ export function ProjectAuditPage() {
           onChange={(e) => setAction(e.target.value)}
         >
           <option value="">All actions</option>
-          {AUDIT_ACTIONS.map((a) => (
+          {PROJECT_AUDIT_ACTIONS.map((a) => (
             <option key={a} value={a}>
               {a}
             </option>
