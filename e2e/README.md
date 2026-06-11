@@ -39,19 +39,17 @@ task) — it is slower, needs a browser, and owns global instance state.
 
 1. builds `@safe/web` if `apps/web/dist` is missing,
 2. deletes and recreates a throwaway SQLite database (`e2e/.tmp/safe-e2e.db`),
-3. generates a fresh `SAFE_MASTER_KEY` + `BETTER_AUTH_SECRET`,
-4. boots the real, unmodified API in-process on port 3180 with
-   `REDIS_URL=redis://localhost:6380`, and
-5. serves `apps/web/dist` + an `/api` reverse proxy on port 3179 — the same
-   topology as `vite dev` (which proxies `/api` to the API).
+3. generates a fresh `SAFE_MASTER_KEY` + `BETTER_AUTH_SECRET`, and
+4. boots the real, unmodified API in-process on port 3179 with
+   `REDIS_URL=redis://localhost:6380` and `SAFE_WEB_DIST=apps/web/dist` —
+   the production/docker topology, where the API serves the SPA itself.
 
-> **Why a front proxy instead of `SAFE_WEB_DIST`?** Serving the SPA from
-> the API itself currently breaks every GET better-auth endpoint (the
-> static plugin's `GET /*` wildcard shadows the mounted auth handler, so
-> `GET /api/auth/get-session` 404s and no browser session can exist). See
-> `tests/13-static-mode.spec.ts` — a `test.fixme` regression test. Once the
-> app bug is fixed, un-fixme that test and collapse `start-server.ts` back
-> to a single server with `SAFE_WEB_DIST=apps/web/dist`.
+> Static mode used to be broken (the static plugin's `GET /*` wildcard
+> shadowed the mounted better-auth handler for GETs, so
+> `GET /api/auth/get-session` 404ed and no browser session could exist) and
+> the suite fronted the API with a static+proxy server as a workaround.
+> That is fixed; `tests/13-static-mode.spec.ts` pins the regression against
+> a dedicated static-mode instance.
 
 A fresh database per run is what makes the suite repeatable: project ids
 are new every run, so the shared redis db never needs flushing (its keys
