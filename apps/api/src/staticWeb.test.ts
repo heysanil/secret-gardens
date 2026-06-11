@@ -22,7 +22,7 @@ beforeAll(async () => {
   mkdirSync(join(distDir, "assets"), { recursive: true });
   writeFileSync(join(distDir, "assets", "x.js"), ASSET_JS);
   ctx = await createTestApp(redis);
-  await mountWebDist(ctx.app, distDir);
+  await mountWebDist(ctx.app, distDir, ctx.auth);
 });
 
 afterAll(() => {
@@ -80,5 +80,47 @@ describe("mountWebDist", () => {
     );
     expect(res.status).toBe(404);
     expect(await res.text()).not.toContain("safe web ui");
+  });
+
+  test("mounted better-auth GET endpoints are not shadowed by static serving", async () => {
+    // Regression: a GET /* wildcard beats the ALL /* `.mount(auth.handler)`
+    // for GET requests; static mode must forward these, or no browser
+    // session can exist when SAFE_WEB_DIST is set.
+    const res = await ctx.app.handle(
+      new Request("http://localhost/api/auth/get-session"),
+    );
+    expect(res.status).toBe(200);
+    // No cookie → better-auth answers with a JSON null session, never the
+    // API's not_found shape or HTML.
+    expect(await res.json()).toBeNull();
+  });
+
+  test("mounted better-auth GET endpoints carry session state through static serving", async () => {
+    const email = `static-${Date.now()}@example.com`;
+    const signUp = await ctx.app.handle(
+      new Request("http://localhost/api/auth/sign-up/email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password: "static-mode-password-1!",
+          name: "Static Mode",
+        }),
+      }),
+    );
+    expect(signUp.status).toBe(200);
+    const cookie = signUp.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0])
+      .join("; ");
+
+    const res = await ctx.app.handle(
+      new Request("http://localhost/api/auth/get-session", {
+        headers: { cookie },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { user?: { email?: string } } | null;
+    expect(body?.user?.email).toBe(email);
   });
 });

@@ -30,7 +30,7 @@ async function main(): Promise<void> {
 
   const app = createApp({ db, redis, config, auth, audit });
   if (config.webDistPath !== null) {
-    await mountWebDist(app, config.webDistPath);
+    await mountWebDist(app, config.webDistPath, auth);
   }
   app.listen(config.port);
   console.log(
