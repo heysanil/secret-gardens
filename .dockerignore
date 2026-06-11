@@ -1,0 +1,25 @@
+# Dependencies — installed inside the image.
+node_modules
+
+# VCS / tooling caches.
+.git
+.turbo
+.vite
+coverage
+
+# Build outputs — the web dist is built inside the build stage.
+dist
+
+# Local state: never bake secrets or databases into an image.
+.env
+.env.*
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data
+
+# Docs and misc not needed at runtime.
+docs
+*.log
+.DS_Store

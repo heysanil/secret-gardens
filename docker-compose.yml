@@ -1,0 +1,45 @@
+# safe — self-hosted deployment: app (API + web UI) + Redis.
+# Compose reads .env from this directory automatically — run scripts/setup.sh
+# first to generate it.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3000:3000"
+    # Optional settings (SAFE_AUDIT_MAXLEN, GITHUB_*/GOOGLE_* OAuth,
+    # SAFE_ADDITIONAL_ORIGINS, ...) pass straight through from .env.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SAFE_MASTER_KEY: ${SAFE_MASTER_KEY:?missing — run scripts/setup.sh to generate .env}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?missing — run scripts/setup.sh to generate .env}
+      # The public URL users reach the instance at. Must match for cookies
+      # and OAuth callbacks; setup.sh writes both vars.
+      SAFE_PUBLIC_URL: ${SAFE_PUBLIC_URL:-${BETTER_AUTH_URL:-http://localhost:3000}}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - safe-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - safe-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  safe-data:
+  safe-redis:
