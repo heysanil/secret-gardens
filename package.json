@@ -3,12 +3,14 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "e2e"
   ],
   "packageManager": "bun@1.3.5",
   "scripts": {
     "build": "bunx turbo run build",
-    "test": "bunx turbo run test",
+    "test": "bunx turbo run test --filter=!@safe/e2e",
+    "test:e2e": "bun run --cwd e2e test",
     "typecheck": "bunx turbo run typecheck",
     "lint": "bunx turbo run lint"
   },

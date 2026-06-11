@@ -1,0 +1,17 @@
+{
+  "name": "@safe/e2e",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check ."
+  },
+  "devDependencies": {
+    "@playwright/test": "1.60.0",
+    "@safe/crypto": "workspace:*",
+    "@types/node": "^25.9.3",
+    "typescript": "~5.9.3"
+  }
+}
