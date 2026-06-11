@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { staticPlugin } from "@elysiajs/static";
 import type { App } from "./app";
@@ -17,6 +18,9 @@ import type { App } from "./app";
  * extraction. Mutates `app` in place; the App type is unchanged.
  */
 export async function mountWebDist(app: App, distPath: string): Promise<void> {
+  // Read once at mount: index.html is immutable while the server runs, and
+  // a missing dist fails the boot here instead of 500ing per request.
+  const indexHtml = await readFile(join(distPath, "index.html"));
   // Global scope + registered BEFORE the static plugin: hooks only apply to
   // routes added after them, and the plugin's wildcard route throws
   // NOT_FOUND for unknown paths — this handler must already be in place.
@@ -34,7 +38,7 @@ export async function mountWebDist(app: App, distPath: string): Promise<void> {
     // set.status — a Response's own 200 would be overridden by the error's
     // 404 when mapped out of onError.
     set.status = 200;
-    return new Response(Bun.file(join(distPath, "index.html")), {
+    return new Response(indexHtml, {
       headers: { "content-type": "text/html; charset=utf-8" },
     });
   });
