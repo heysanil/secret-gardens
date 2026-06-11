@@ -35,8 +35,9 @@ CLI-side variables (not server config): `GARDENS_TOKEN` (token for headless/CI
 use, takes precedence over stored credentials) and `GARDENS_HOST` (fallback host
 when no `--host` flag or `.gardens.json` is present).
 
-Memory note: password hashing is argon2id (~64 MB per concurrent hash) —
-give the app container at least 512 MB.
+Memory note: password hashing is argon2id with OWASP parameters (19 MiB
+memory cost per concurrent hash, configured explicitly — not Bun's 64 MiB
+default) — give the app container at least 512 MB for comfortable headroom.
 
 ## Backup & restore
 
