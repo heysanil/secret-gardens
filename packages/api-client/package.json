@@ -13,8 +13,7 @@
     "lint": "biome check ."
   },
   "dependencies": {
-    "@elysiajs/eden": "1.4.9",
-    "@safe/shared": "workspace:*"
+    "@elysiajs/eden": "1.4.9"
   },
   "devDependencies": {
     "@safe/api": "workspace:*",

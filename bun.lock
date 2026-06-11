@@ -62,7 +62,6 @@
       "version": "0.0.1",
       "dependencies": {
         "@elysiajs/eden": "1.4.9",
-        "@safe/shared": "workspace:*",
       },
       "devDependencies": {
         "@safe/api": "workspace:*",

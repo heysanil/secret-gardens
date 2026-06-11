@@ -21,7 +21,7 @@ export interface ApiClientOptions {
    */
   token?: string;
   /** Cookie mode (web) — passed through to fetch's `credentials` option. */
-  credentials?: "include" | "omit";
+  credentials?: NonNullable<RequestInit["credentials"]>;
   /** Custom fetch implementation — injection point for tests. */
   fetcher?: typeof fetch;
 }
