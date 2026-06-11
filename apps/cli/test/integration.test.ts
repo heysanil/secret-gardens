@@ -449,6 +449,17 @@ describe("secrets list/get/set/rm", () => {
     expect(res.stdout).toBe("postgres://two\n");
   });
 
+  test("get of a key that never existed is a friendly error", async () => {
+    const res = await runCli(["secrets", "get", "NEVER_SET"], {
+      cwd,
+      home,
+      env,
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.stderr).toContain('Secret "NEVER_SET" not found');
+    expect(res.stdout).toBe("");
+  });
+
   test("list shows keys + metadata, never values", async () => {
     const res = await runCli(["secrets", "list"], { cwd, home, env });
     expect(res.exitCode).toBe(0);
@@ -532,6 +543,15 @@ describe("run", () => {
     // The CLI's own output never contains secret values.
     expect(res.stdout).not.toContain(MARKER_VALUE);
     expect(res.stderr).not.toContain(MARKER_VALUE);
+  });
+
+  test("a signal-killed child exits 128+signal, not 0", async () => {
+    const res = await runCli(["run", "--", "sh", "-c", "kill -TERM $$"], {
+      cwd,
+      home,
+      env,
+    });
+    expect(res.exitCode).toBe(143); // 128 + SIGTERM(15)
   });
 
   test("run without -- <cmd> is a usage error", async () => {
@@ -670,6 +690,43 @@ describe("rotate dek", () => {
     });
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain("Permission denied");
+  });
+
+  test("--project <slug> works without any .safe.json", async () => {
+    const project = await createProject(api.url, ownerCookie, "Rotate Flag");
+    const workdir = makeWorkdir(api.url, project);
+    const home = tempDir("safe-cli-home-");
+    const env = { SAFE_TOKEN: pat.token };
+    const set = await runCli(["secrets", "set", "FLAG_KEY", "flag-value"], {
+      cwd: workdir,
+      home,
+      env,
+    });
+    expect(set.exitCode).toBe(0);
+
+    // Bare directory: no .safe.json anywhere — host comes from SAFE_HOST.
+    const res = await runCli(
+      ["rotate", "dek", "--project", project.slug, "--yes"],
+      {
+        cwd: tempDir("safe-cli-empty-"),
+        home,
+        env: { ...env, SAFE_HOST: api.url },
+      },
+    );
+    expect(res.exitCode).toBe(0);
+    expect(res.stdout).toContain(`DEK rotated for ${project.slug}`);
+    expect(res.stdout).toContain("v1 → v2");
+    expect(res.stdout).toContain("1 secret re-encrypted");
+  });
+
+  test("--project with an unknown slug is a friendly error", async () => {
+    const res = await runCli(["rotate", "dek", "--project", "ghost", "--yes"], {
+      cwd: tempDir("safe-cli-empty-"),
+      home: tempDir("safe-cli-home-"),
+      env: { SAFE_TOKEN: pat.token, SAFE_HOST: api.url },
+    });
+    expect(res.exitCode).toBe(1);
+    expect(res.stderr).toContain('Project "ghost" not found');
   });
 });
 

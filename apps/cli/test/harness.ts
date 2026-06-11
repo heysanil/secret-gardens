@@ -40,53 +40,78 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-/** Boots apps/api with a fresh master key / SQLite file on a random port. */
+/**
+ * Boots apps/api with a fresh master key / SQLite file on a random port.
+ *
+ * Port strategy: freePort() has an inherent TOCTOU window (the port is
+ * released before the API child binds it). The API's config rejects PORT=0,
+ * so we cannot delegate ephemeral assignment to it; instead a bind failure
+ * is detected (the child exits before /api/health responds) and the spawn
+ * is retried on a fresh port, up to 3 attempts.
+ */
 export async function startApi(): Promise<ApiServer> {
-  const port = await freePort();
   const dataDir = tempDir("safe-cli-api-");
-  const proc: Subprocess<"ignore", "pipe", "pipe"> = Bun.spawn(
-    [process.execPath, API_ENTRY],
-    {
-      env: {
-        ...process.env,
-        PORT: String(port),
-        SAFE_MASTER_KEY: randomBytes(32).toString("base64"),
-        BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
-        REDIS_URL: TEST_REDIS_URL,
-        SAFE_DB_PATH: join(dataDir, "safe.db"),
-        SAFE_PUBLIC_URL: `http://127.0.0.1:${port}`,
-      },
-      stdin: "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-  const url = `http://127.0.0.1:${port}`;
+  let lastFailure = "";
 
-  const deadline = Date.now() + 30_000;
-  for (;;) {
-    try {
-      const res = await fetch(`${url}/api/health`);
-      if (res.ok) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const port = await freePort();
+    const proc: Subprocess<"ignore", "pipe", "pipe"> = Bun.spawn(
+      [process.execPath, API_ENTRY],
+      {
+        env: {
+          ...process.env,
+          PORT: String(port),
+          SAFE_MASTER_KEY: randomBytes(32).toString("base64"),
+          BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
+          REDIS_URL: TEST_REDIS_URL,
+          SAFE_DB_PATH: join(dataDir, `safe-${attempt}.db`),
+          SAFE_PUBLIC_URL: `http://127.0.0.1:${port}`,
+        },
+        stdin: "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const url = `http://127.0.0.1:${port}`;
+
+    const deadline = Date.now() + 30_000;
+    let died = false;
+    for (;;) {
+      if (proc.exitCode !== null) {
+        // Bind failure (EADDRINUSE — someone grabbed the port in the TOCTOU
+        // window) or any other boot error: capture and retry on a new port.
+        died = true;
+        lastFailure = await new Response(proc.stderr).text();
         break;
       }
-    } catch {
-      // Not up yet.
+      try {
+        const res = await fetch(`${url}/api/health`);
+        if (res.ok) {
+          return {
+            url,
+            stop() {
+              proc.kill();
+            },
+          };
+        }
+      } catch {
+        // Not up yet.
+      }
+      if (Date.now() > deadline) {
+        proc.kill();
+        const stderr = await new Response(proc.stderr).text();
+        throw new Error(`API failed to start within 30s. stderr:\n${stderr}`);
+      }
+      await Bun.sleep(100);
     }
-    if (Date.now() > deadline) {
-      proc.kill();
-      const stderr = await new Response(proc.stderr).text();
-      throw new Error(`API failed to start within 30s. stderr:\n${stderr}`);
+    if (!died) {
+      break;
     }
-    await Bun.sleep(100);
   }
 
-  return {
-    url,
-    stop() {
-      proc.kill();
-    },
-  };
+  throw new Error(
+    `API failed to start after 3 attempts. Last stderr:\n${lastFailure}`,
+  );
 }
 
 // --- HTTP seeding helpers ----------------------------------------------------

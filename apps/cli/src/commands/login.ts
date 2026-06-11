@@ -20,7 +20,8 @@ export const loginCommand = defineCommand({
     },
     token: {
       type: "string",
-      description: "Personal access token (safe_ut_…) for headless login",
+      description:
+        "Personal access token (safe_ut_…) for headless login. Caveat: flag values are visible in process listings — prefer the SAFE_TOKEN env var where that matters",
     },
   },
   run: wrapRun(async ({ args }) => {

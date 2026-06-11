@@ -3,7 +3,13 @@
  * chmod 0600, keyed by normalized host. Every function takes an env record so
  * tests never touch the real HOME.
  */
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { CliError } from "./errors";
@@ -97,11 +103,16 @@ export function writeCredentials(
 ): string {
   const path = credentialsPath(env);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, `${JSON.stringify(credentials, null, 2)}\n`, {
+  // Atomic replace: write a sibling temp file, then rename over the target —
+  // a crash mid-write can never leave a truncated credentials file behind.
+  const tmpPath = `${path}.tmp`;
+  writeFileSync(tmpPath, `${JSON.stringify(credentials, null, 2)}\n`, {
     mode: 0o600,
   });
-  // writeFileSync's mode only applies on creation — tighten pre-existing files.
-  chmodSync(path, 0o600);
+  // writeFileSync's mode only applies on creation — tighten a leftover temp
+  // file too; the rename then carries 0600 over any pre-existing target.
+  chmodSync(tmpPath, 0o600);
+  renameSync(tmpPath, path);
   return path;
 }
 

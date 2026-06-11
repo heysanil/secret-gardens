@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import {
   chmodSync,
+  existsSync,
   mkdtempSync,
   rmSync,
   statSync,
@@ -73,6 +74,16 @@ test("write/read round-trip preserves the full shape", () => {
 test("writeCredentials creates the file with mode 0600", () => {
   const { env } = tempEnv();
   const path = writeCredentials(emptyCredentials(), env);
+  expect(statSync(path).mode & 0o777).toBe(0o600);
+});
+
+test("writeCredentials is atomic — no .tmp file survives the write", () => {
+  const { env } = tempEnv();
+  const path = writeCredentials(emptyCredentials(), env);
+  expect(existsSync(`${path}.tmp`)).toBe(false);
+  // And again over an existing file.
+  writeCredentials(emptyCredentials(), env);
+  expect(existsSync(`${path}.tmp`)).toBe(false);
   expect(statSync(path).mode & 0o777).toBe(0o600);
 });
 

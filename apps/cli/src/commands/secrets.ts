@@ -8,7 +8,7 @@ import {
   resolveEnvironment,
   resolveEnvSlug,
 } from "../lib/context";
-import { CliError, wrapRun } from "../lib/errors";
+import { wrapRun } from "../lib/errors";
 
 const ENV_ARG = {
   type: "string",
@@ -77,15 +77,19 @@ const getCommand = defineCommand({
   },
   run: wrapRun(async ({ args }) => {
     const t = await resolveTarget(args.env);
-    const entries = await fetchSecrets(t.ctx, t.projectId, t.envId, {
-      includeValues: true,
-    });
-    const entry = entries.find((e) => e.key === args.key);
-    if (entry === undefined) {
-      throw new CliError(
-        `Secret "${args.key}" not found in ${t.projectSlug}/${t.envSlug}.`,
-      );
-    }
+    // Single-key endpoint: only this secret is decrypted, and the server
+    // audits one targeted secrets.read {envId, key} — not a bulk read.
+    const entry = await call(
+      t.ctx.host,
+      t.ctx.client.api
+        .projects({ projectId: t.projectId })
+        .environments({ envId: t.envId })
+        .secrets({ key: args.key })
+        .get({ query: { include_value: "true" } }),
+      {
+        notFound: `Secret "${args.key}" not found in ${t.projectSlug}/${t.envSlug}.`,
+      },
+    );
     // The value itself, verbatim, plus a single trailing newline (documented).
     process.stdout.write(`${entry.value ?? ""}\n`);
   }),

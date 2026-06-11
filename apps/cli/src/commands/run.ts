@@ -8,6 +8,19 @@ import {
 } from "../lib/context";
 import { CliError, wrapRun } from "../lib/errors";
 
+/** POSIX signal numbers for the shell's 128+n exit convention. */
+const SIGNAL_NUMBERS: Record<string, number> = {
+  SIGHUP: 1,
+  SIGINT: 2,
+  SIGQUIT: 3,
+  SIGABRT: 6,
+  SIGKILL: 9,
+  SIGSEGV: 11,
+  SIGPIPE: 13,
+  SIGALRM: 14,
+  SIGTERM: 15,
+};
+
 export const runCommand = defineCommand({
   meta: {
     name: "run",
@@ -55,7 +68,13 @@ export const runCommand = defineCommand({
 
     // stdio is inherited and the child shares our foreground process group,
     // so SIGINT reaches it naturally; we just forward its exit code exactly.
-    const code = await proc.exited;
-    process.exit(code);
+    await proc.exited;
+    if (proc.exitCode !== null) {
+      process.exit(proc.exitCode);
+    }
+    // Signal death: exitCode is null and signalCode names the signal. Exit
+    // 128+n per shell convention (SIGTERM → 143) rather than masking it as
+    // success; unknown signal names fall back to n=1.
+    process.exit(128 + (SIGNAL_NUMBERS[proc.signalCode ?? ""] ?? 1));
   }),
 });
