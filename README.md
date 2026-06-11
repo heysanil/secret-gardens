@@ -112,6 +112,11 @@ too, or the image build fails at `bun install --frozen-lockfile`.
 - [docs/security.md](docs/security.md) — threat model, encryption scheme,
   token formats
 
+Contributing (humans and coding agents alike): start with
+[AGENTS.md](./AGENTS.md) — commands, invariants, and the binding
+documentation-maintenance contract; each workspace has its own nested
+`AGENTS.md`.
+
 ## License
 
 [AGPL-3.0](./LICENSE)
