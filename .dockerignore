@@ -1,25 +1,31 @@
 # Dependencies — installed inside the image.
-node_modules
+**/node_modules
 
 # VCS / tooling caches.
 .git
-.turbo
-.vite
-coverage
+**/.turbo
+**/.vite
+**/coverage
 
 # Build outputs — the web dist is built inside the build stage.
-dist
+**/dist
 
 # Local state: never bake secrets or databases into an image.
-.env
-.env.*
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
-data
+**/.env
+**/.env.*
+**/*.db
+**/*.db-journal
+**/*.db-wal
+**/*.db-shm
+**/data
+
+# e2e artifacts (e2e/package.json stays — it is a workspace member).
+e2e/.auth
+e2e/.tmp
+e2e/test-results
+e2e/playwright-report
 
 # Docs and misc not needed at runtime.
 docs
-*.log
-.DS_Store
+**/*.log
+**/.DS_Store

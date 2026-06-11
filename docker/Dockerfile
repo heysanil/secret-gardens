@@ -15,6 +15,7 @@ COPY apps/web/package.json apps/web/
 COPY packages/api-client/package.json packages/api-client/
 COPY packages/crypto/package.json packages/crypto/
 COPY packages/shared/package.json packages/shared/
+COPY e2e/package.json e2e/
 
 RUN bun install --frozen-lockfile
 
@@ -29,11 +30,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Full workspace source — the API runs straight from TypeScript under Bun.
+# (e2e/package.json only satisfies the lockfile's workspace set.)
 COPY package.json bun.lock bunfig.toml turbo.json tsconfig.base.json ./
 COPY apps/api apps/api
 COPY apps/cli apps/cli
 COPY apps/web/package.json apps/web/package.json
 COPY packages packages
+COPY e2e/package.json e2e/package.json
 
 # Production dependencies only (no vite/typescript/biome toolchain).
 RUN bun install --production --frozen-lockfile
