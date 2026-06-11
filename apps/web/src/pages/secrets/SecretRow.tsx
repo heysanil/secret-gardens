@@ -9,6 +9,7 @@ const MASK = "••••••••";
 
 export function SecretRow({
   entry,
+  updatedByName,
   value,
   revealed,
   valuesLoading,
@@ -21,6 +22,8 @@ export function SecretRow({
   onHistory,
 }: {
   entry: SecretEntry;
+  /** Resolved display name for updatedBy; undefined → show the raw id. */
+  updatedByName: string | undefined;
   value: string | undefined;
   revealed: boolean;
   valuesLoading: boolean;
@@ -129,10 +132,12 @@ export function SecretRow({
           {formatRelativeTime(entry.updatedAt)}
         </span>
         <span
-          className="block max-w-32 truncate font-mono text-[11px] text-ink-faint"
+          className={`block max-w-32 truncate text-[11px] text-ink-faint ${
+            updatedByName === undefined ? "font-mono" : ""
+          }`}
           title={entry.updatedBy}
         >
-          {entry.updatedBy}
+          {updatedByName ?? entry.updatedBy}
         </span>
       </td>
 

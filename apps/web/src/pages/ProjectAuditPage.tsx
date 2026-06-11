@@ -9,6 +9,7 @@ import { EmptyState } from "../components/EmptyState";
 import { Select } from "../components/Select";
 import { SkeletonRows } from "../components/Skeleton";
 import { formatAbsoluteTime, formatRelativeTime } from "../lib/relativeTime";
+import { useMemberNames } from "../queries";
 import type { ProjectContext } from "./ProjectLayout";
 
 const RESERVED = new Set(["id", "ts", "action", "actorType", "actorId"]);
@@ -29,7 +30,15 @@ function actionTone(action: string): BadgeTone {
   return FAMILY_TONES[action.split(".")[0] ?? ""] ?? "neutral";
 }
 
-function ActorCell({ type, id }: { type: string; id: string }) {
+function ActorCell({
+  type,
+  id,
+  name,
+}: {
+  type: string;
+  id: string;
+  name: string | undefined;
+}) {
   const icon = type === "user" ? "@" : type === "service_token" ? "#" : "·";
   return (
     <span className="flex items-center gap-1.5" title={`${type} ${id}`}>
@@ -39,8 +48,12 @@ function ActorCell({ type, id }: { type: string; id: string }) {
       >
         {icon}
       </span>
-      <span className="max-w-36 truncate font-mono text-[11px] text-ink-faint">
-        {id}
+      <span
+        className={`max-w-36 truncate text-[11px] text-ink-faint ${
+          name === undefined ? "font-mono" : ""
+        }`}
+      >
+        {name ?? id}
       </span>
     </span>
   );
@@ -50,6 +63,7 @@ export function ProjectAuditPage() {
   const { project } = useOutletContext<ProjectContext>();
   const [action, setAction] = useState("");
   const [envId, setEnvId] = useState("");
+  const memberNames = useMemberNames(project.id);
 
   const envSlugById = new Map(
     project.environments.map((e) => [e.id, e.slug] as const),
@@ -152,7 +166,15 @@ export function ProjectAuditPage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-2.5">
-                      <ActorCell type={entry.actorType} id={entry.actorId} />
+                      <ActorCell
+                        type={entry.actorType}
+                        id={entry.actorId}
+                        name={
+                          entry.actorType === "user"
+                            ? memberNames.get(entry.actorId)
+                            : undefined
+                        }
+                      />
                     </td>
                     <td className="px-4 py-2.5 font-mono text-[12px] text-ink-dim">
                       {entryEnv ?? "—"}

@@ -6,7 +6,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Input } from "../../components/Input";
 import { SkeletonRows } from "../../components/Skeleton";
 import { useToast } from "../../components/Toast";
-import type { ProjectRole } from "../../queries";
+import { type ProjectRole, useMemberNames } from "../../queries";
 import { AddSecretRow } from "./AddSecretRow";
 import { SecretRow } from "./SecretRow";
 import { VersionsDrawer } from "./VersionsDrawer";
@@ -35,6 +35,7 @@ export function SecretsTable({
   const canWrite = role === "admin" || role === "write";
   const queryClient = useQueryClient();
   const toast = useToast();
+  const memberNames = useMemberNames(projectId);
 
   const [filter, setFilter] = useState("");
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(new Set());
@@ -198,6 +199,7 @@ export function SecretsTable({
                 <SecretRow
                   key={entry.key}
                   entry={entry}
+                  updatedByName={memberNames.get(entry.updatedBy)}
                   value={values.data?.[entry.key]}
                   revealed={revealed.has(entry.key)}
                   valuesLoading={values.isFetching}

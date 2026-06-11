@@ -8,7 +8,7 @@ import { Drawer } from "../../components/Drawer";
 import { SkeletonRows } from "../../components/Skeleton";
 import { useToast } from "../../components/Toast";
 import { formatAbsoluteTime, formatRelativeTime } from "../../lib/relativeTime";
-import type { ProjectRole } from "../../queries";
+import { type ProjectRole, useMemberNames } from "../../queries";
 
 const OP_TONES: Record<string, BadgeTone> = {
   create: "ok",
@@ -39,6 +39,7 @@ export function VersionsDrawer({
   const [rollbackTo, setRollbackTo] = useState<number | null>(null);
   const queryClient = useQueryClient();
   const toast = useToast();
+  const memberNames = useMemberNames(projectId);
 
   const secretApi = api.api
     .projects({ projectId })
@@ -145,7 +146,9 @@ export function VersionsDrawer({
                     title={`${v.actorType} ${v.actorId}`}
                   >
                     {v.actorType === "service_token" ? "token " : ""}
-                    {v.actorId}
+                    {(v.actorType === "user"
+                      ? memberNames.get(v.actorId)
+                      : undefined) ?? v.actorId}
                   </span>
                   {canWrite && v.version !== newest && (
                     <button

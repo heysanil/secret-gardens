@@ -50,3 +50,17 @@ export function useBootstrap() {
     staleTime: 30_000,
   });
 }
+
+/**
+ * userId → display name for a project's members (any role may list them).
+ * Used to render updatedBy/actor ids as humans; unknown ids (service
+ * tokens, departed members) fall back to the raw id at the call site.
+ */
+export function useMemberNames(projectId: string): Map<string, string> {
+  const members = useQuery({
+    queryKey: keys.members(projectId),
+    queryFn: () => unwrap(api.api.projects({ projectId }).members.get()),
+    staleTime: 60_000,
+  });
+  return new Map((members.data ?? []).map((m) => [m.userId, m.name]));
+}
