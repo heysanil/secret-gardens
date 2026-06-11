@@ -37,6 +37,8 @@ const FRIENDLY: Record<string, string> = {
   signup_disabled:
     "Signup is disabled on this instance. Ask an admin to invite you.",
   invalid_token: "Your credentials are no longer valid.",
+  parent_token_expired:
+    "Your current token is about to expire — sign in again to create new tokens.",
   decrypt_failed:
     "The server could not decrypt a secret. Check the server logs.",
 };

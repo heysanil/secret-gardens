@@ -138,6 +138,29 @@ docker compose exec redis sh -c '
   done'
 ```
 
+## Hardening
+
+Two compose defaults trade convenience for a softer posture; tighten them
+when the Docker host or its network is shared with anything you don't fully
+trust:
+
+- **`docker inspect` exposes the master key.** Compose passes
+  `SAFE_MASTER_KEY` to the app container as a plain environment variable, so
+  `docker inspect` on the app container prints it to anyone with Docker API
+  access (root or the `docker` group). Treat `docker` group membership as
+  equivalent to holding the key. For hardened deployments, prefer Docker
+  secrets or another env-isolation mechanism (e.g. injecting the key at
+  start time from a secrets manager instead of keeping it in `.env`), and
+  keep `.env` at mode 600 (setup.sh does this).
+- **The bundled Redis is unauthenticated.** It stores ciphertext only (see
+  security.md) and compose does not publish its port to the host, but any
+  peer on the compose network can read, delete or corrupt that data. If the
+  Docker network is not fully trusted (shared hosts, other containers on the
+  same network), set a password and keep Redis on an isolated network: add
+  `--requirepass <password>` to the `redis` service's `command` in
+  `docker-compose.yml` and change the app's pinned `REDIS_URL` to
+  `redis://:<password>@redis:6379`.
+
 ## Reverse proxy / TLS
 
 Run safe behind a TLS-terminating reverse proxy (Caddy, nginx, Traefik) in

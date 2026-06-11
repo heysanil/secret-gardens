@@ -10,7 +10,6 @@ import {
   resolveProjectRole,
   roleAllows,
   SAFE_CONFIG_FILENAME,
-  SAFE_NAME,
   SafeConfigError,
   SECRET_KEY_PATTERN,
   serializeDotenv,
@@ -45,7 +44,6 @@ describe("index re-exports", () => {
     expect(MAX_SECRET_KEY_LENGTH).toBe(256);
     expect(MAX_SECRET_VALUE_BYTES).toBe(64 * 1024);
     expect(MAX_BULK_SECRETS).toBe(1000);
-    expect(SAFE_NAME).toBe("safe");
   });
 
   test("SafeConfigError is an Error subclass", () => {

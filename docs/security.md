@@ -57,8 +57,18 @@ history.
   memory while being encrypted/decrypted and in responses to authorized
   callers.
 - **Operators with environment access** — anyone who can read the app
-  container's env or `.env` holds the master key.
+  container's env or `.env` holds the master key. Note that `docker inspect`
+  on the app container prints `SAFE_MASTER_KEY`, so anyone with Docker API
+  access (root or the `docker` group) can read it; hardened deployments
+  should prefer Docker secrets or another env-isolation mechanism over a
+  plain compose environment variable (see self-hosting.md).
 - **A compromised host** — Docker host root can read everything above.
+- **The Docker network** — the bundled Redis is unauthenticated on the
+  compose network. It holds ciphertext only by design (see the table above),
+  so a network peer learns no secret values, but it could delete or corrupt
+  data (tampered ciphertext fails AES-GCM authentication on read; deletion
+  is data loss). When the Docker network is not fully trusted, enable
+  `requirepass` and isolate Redis on its own network (see self-hosting.md).
 - **Transport beyond the proxy** — TLS is the deployment's job (see
   self-hosting.md); run the app behind a TLS-terminating reverse proxy.
 
