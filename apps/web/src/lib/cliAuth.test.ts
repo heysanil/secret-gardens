@@ -65,12 +65,12 @@ describe("parseCliAuthParams", () => {
 describe("buildCallbackUrl", () => {
   test("matches the fixed CLI contract exactly", () => {
     const url = buildCallbackUrl(49152, {
-      token: "safe_ut_secret",
+      token: "sg_ut_secret",
       tokenId: "ut_1",
       state: "xyz",
     });
     expect(url).toBe(
-      "http://127.0.0.1:49152/callback?token=safe_ut_secret&tokenId=ut_1&state=xyz",
+      "http://127.0.0.1:49152/callback?token=sg_ut_secret&tokenId=ut_1&state=xyz",
     );
   });
 

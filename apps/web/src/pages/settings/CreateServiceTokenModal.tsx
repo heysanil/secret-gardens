@@ -80,7 +80,7 @@ export function CreateServiceTokenModal({
           <p className="text-[13px] text-ink-dim">
             Use it in CI:{" "}
             <code className="rounded bg-raised px-1.5 py-px text-[12px]">
-              SAFE_TOKEN={minted.slice(0, 12)}… safe pull
+              GARDENS_TOKEN={minted.slice(0, 12)}… gardens pull
             </code>
           </p>
           <div className="flex justify-end">

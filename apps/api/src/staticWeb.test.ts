@@ -10,7 +10,8 @@ import { mountWebDist } from "./staticWeb";
 
 const redis = createRedis(TEST_REDIS_URL);
 
-const INDEX_HTML = "<!doctype html><html><body>safe web ui</body></html>";
+const INDEX_HTML =
+  "<!doctype html><html><body>secret-gardens web ui</body></html>";
 const ASSET_JS = 'console.log("asset");';
 
 let distDir: string;
@@ -18,7 +19,7 @@ let ctx: TestApp;
 
 beforeAll(async () => {
   await redis.connect();
-  distDir = mkdtempSync(join(tmpdir(), "safe-webdist-"));
+  distDir = mkdtempSync(join(tmpdir(), "gardens-webdist-"));
   writeFileSync(join(distDir, "index.html"), INDEX_HTML);
   mkdirSync(join(distDir, "assets"), { recursive: true });
   writeFileSync(join(distDir, "assets", "x.js"), ASSET_JS);
@@ -80,13 +81,13 @@ describe("mountWebDist", () => {
       new Request("http://localhost/projects/deep/link", { method: "POST" }),
     );
     expect(res.status).toBe(404);
-    expect(await res.text()).not.toContain("safe web ui");
+    expect(await res.text()).not.toContain("secret-gardens web ui");
   });
 
   test("mounted better-auth GET endpoints are not shadowed by static serving", async () => {
     // Regression: a GET /* wildcard beats the ALL /* `.mount(auth.handler)`
     // for GET requests; static mode must forward these, or no browser
-    // session can exist when SAFE_WEB_DIST is set.
+    // session can exist when GARDENS_WEB_DIST is set.
     const res = await ctx.app.handle(
       new Request("http://localhost/api/auth/get-session"),
     );

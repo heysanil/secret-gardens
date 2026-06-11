@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { AUDIT_ACTIONS, type AuditAction } from "@safe/shared";
+import { AUDIT_ACTIONS, type AuditAction } from "@secret-gardens/shared";
 import { Elysia } from "elysia";
 import { type Auth, principalPlugin } from "../auth";
 import type { AuditLog, ReadAuditOptions } from "../redis/audit";

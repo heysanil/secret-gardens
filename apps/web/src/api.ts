@@ -3,7 +3,7 @@
  * helper every TanStack Query call goes through. 401s anywhere outside the
  * auth screens bounce to /login?next=<path>.
  */
-import { createApiClient } from "@safe/api-client";
+import { createApiClient } from "@secret-gardens/api-client";
 
 export const api = createApiClient({
   baseUrl: window.location.origin,

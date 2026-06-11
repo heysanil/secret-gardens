@@ -1,11 +1,11 @@
 /**
  * Playwright webServer entrypoint (run with bun, cwd = e2e/).
  *
- * 1. Ensures apps/web/dist exists (builds @safe/web if missing).
+ * 1. Ensures apps/web/dist exists (builds @secret-gardens/web if missing).
  * 2. Wipes the e2e SQLite database so every run starts on a fresh instance
  *    (this is what makes the 01-setup owner-signup flow repeatable).
  * 3. Boots the real API server in-process on E2E_PORT with
- *    SAFE_WEB_DIST=apps/web/dist — the production/docker topology: the API
+ *    GARDENS_WEB_DIST=apps/web/dist — the production/docker topology: the API
  *    serves the SPA itself, so the suite exercises static mode end to end
  *    (see tests/13-static-mode.spec.ts for the focused regression test).
  */
@@ -16,7 +16,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { generateMasterKey } from "@safe/crypto";
+import { generateMasterKey } from "@secret-gardens/crypto";
 
 const E2E_PORT = 3179;
 
@@ -25,14 +25,14 @@ const repoRoot = dirname(e2eDir);
 const webDist = join(repoRoot, "apps", "web", "dist");
 
 if (!existsSync(join(webDist, "index.html"))) {
-  console.log("apps/web/dist missing — building @safe/web…");
+  console.log("apps/web/dist missing — building @secret-gardens/web…");
   const build = spawnSync(
     "bunx",
-    ["turbo", "run", "build", "--filter=@safe/web"],
+    ["turbo", "run", "build", "--filter=@secret-gardens/web"],
     { cwd: repoRoot, stdio: "inherit" },
   );
   if (build.status !== 0) {
-    console.error("failed to build @safe/web");
+    console.error("failed to build @secret-gardens/web");
     process.exit(1);
   }
 }
@@ -54,18 +54,18 @@ try {
 
 const tmpDir = join(e2eDir, ".tmp");
 mkdirSync(tmpDir, { recursive: true });
-const dbPath = join(tmpDir, "safe-e2e.db");
+const dbPath = join(tmpDir, "gardens-e2e.db");
 for (const suffix of ["", "-journal", "-wal", "-shm"]) {
   rmSync(dbPath + suffix, { force: true });
 }
 
 process.env.PORT = String(E2E_PORT);
-process.env.SAFE_PUBLIC_URL = `http://localhost:${E2E_PORT}`;
-process.env.SAFE_DB_PATH = dbPath;
-process.env.SAFE_MASTER_KEY = generateMasterKey();
+process.env.GARDENS_PUBLIC_URL = `http://localhost:${E2E_PORT}`;
+process.env.GARDENS_DB_PATH = dbPath;
+process.env.GARDENS_MASTER_KEY = generateMasterKey();
 process.env.BETTER_AUTH_SECRET = randomBytes(32).toString("hex");
 process.env.REDIS_URL = "redis://localhost:6380";
-process.env.SAFE_WEB_DIST = webDist;
+process.env.GARDENS_WEB_DIST = webDist;
 
 // Importing the API entrypoint boots the server (config → migrations →
 // redis → listen); this process IS the server, so Playwright's webServer
@@ -73,5 +73,5 @@ process.env.SAFE_WEB_DIST = webDist;
 await import(join(repoRoot, "apps", "api", "src", "index.ts"));
 
 console.log(
-  `e2e server on http://localhost:${E2E_PORT} (SAFE_WEB_DIST=${webDist})`,
+  `e2e server on http://localhost:${E2E_PORT} (GARDENS_WEB_DIST=${webDist})`,
 );

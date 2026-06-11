@@ -1,4 +1,4 @@
-import { classifyToken } from "@safe/shared";
+import { classifyToken } from "@secret-gardens/shared";
 import { defineCommand } from "citty";
 import { call } from "../lib/api";
 import { createCommandContext } from "../lib/context";
@@ -15,7 +15,7 @@ export const whoamiCommand = defineCommand({
     // soft success so scripts can rely on whoami meaning "a user".
     if (classifyToken(ctx.token) === "service") {
       throw new CliError(
-        "SAFE_TOKEN is a service token — service tokens are project-scoped machine tokens with no user identity. Unset SAFE_TOKEN or run `safe login` to act as a user.",
+        "GARDENS_TOKEN is a service token — service tokens are project-scoped machine tokens with no user identity. Unset GARDENS_TOKEN or run `gardens login` to act as a user.",
       );
     }
     const me = await call(ctx.host, ctx.client.api.me.get());

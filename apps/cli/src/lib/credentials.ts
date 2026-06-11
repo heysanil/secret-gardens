@@ -1,5 +1,5 @@
 /**
- * Credentials store: `${XDG_CONFIG_HOME ?? ~/.config}/safe/credentials.json`,
+ * Credentials store: `${XDG_CONFIG_HOME ?? ~/.config}/gardens/credentials.json`,
  * chmod 0600, keyed by normalized host. Every function takes an env record so
  * tests never touch the real HOME.
  */
@@ -18,13 +18,13 @@ export type Env = Record<string, string | undefined>;
 
 export interface HostCredentials {
   token: string;
-  /** Set by the browser loopback flow; lets `safe logout` revoke by id. */
+  /** Set by the browser loopback flow; lets `gardens logout` revoke by id. */
   tokenId?: string;
 }
 
 export interface CredentialsFile {
   version: 1;
-  /** First login sets this; `safe logout` clears it when logging out of it. */
+  /** First login sets this; `gardens logout` clears it when logging out of it. */
   defaultHost?: string;
   hosts: Record<string, HostCredentials>;
 }
@@ -35,7 +35,7 @@ export function credentialsPath(env: Env = process.env): string {
     xdg !== undefined && xdg !== ""
       ? xdg
       : join(env.HOME ?? homedir(), ".config");
-  return join(base, "safe", "credentials.json");
+  return join(base, "gardens", "credentials.json");
 }
 
 export function emptyCredentials(): CredentialsFile {
@@ -65,7 +65,7 @@ export function readCredentials(env: Env = process.env): CredentialsFile {
 
   const invalid = () =>
     new CliError(
-      `${path}: invalid credentials file — delete it and run \`safe login\` again.`,
+      `${path}: invalid credentials file — delete it and run \`gardens login\` again.`,
     );
   let data: unknown;
   try {

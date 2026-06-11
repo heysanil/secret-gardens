@@ -1,6 +1,6 @@
 export const TOKEN_PREFIXES = {
-  serviceToken: "safe_st_",
-  userToken: "safe_ut_",
+  serviceToken: "sg_st_",
+  userToken: "sg_ut_",
 } as const;
 
 export type TokenKind = "service" | "user" | null;

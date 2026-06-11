@@ -3,7 +3,7 @@ import { hostname } from "node:os";
 import { CliError } from "./errors";
 import { loopbackLogin } from "./loopback";
 
-const HOST = "https://safe.example";
+const HOST = "https://gardens.example";
 
 test("auth URL carries the fixed querystring contract", async () => {
   let captured = "";
@@ -16,13 +16,13 @@ test("auth URL carries the fixed querystring contract", async () => {
       );
       // Complete the flow so the test can finish.
       void fetch(
-        `http://127.0.0.1:${port}/callback?token=safe_ut_x&tokenId=ut_1&state=${state}`,
+        `http://127.0.0.1:${port}/callback?token=sg_ut_x&tokenId=ut_1&state=${state}`,
       );
     },
   });
   const result = await login;
   expect(captured).toContain("/cli-auth?");
-  expect(result).toEqual({ token: "safe_ut_x", tokenId: "ut_1" });
+  expect(result).toEqual({ token: "sg_ut_x", tokenId: "ut_1" });
 });
 
 test("callback with the right state resolves and serves the success page", async () => {
@@ -36,11 +36,11 @@ test("callback with the right state resolves and serves the success page", async
     },
   });
   const res = await fetch(
-    `${callbackBase}?token=safe_ut_tok&tokenId=ut_42&state=${state}`,
+    `${callbackBase}?token=sg_ut_tok&tokenId=ut_42&state=${state}`,
   );
   expect(res.status).toBe(200);
   expect(await res.text()).toContain("Authenticated");
-  expect(await login).toEqual({ token: "safe_ut_tok", tokenId: "ut_42" });
+  expect(await login).toEqual({ token: "sg_ut_tok", tokenId: "ut_42" });
 });
 
 test("wrong state gets a 400 and does not resolve the login", async () => {
@@ -60,10 +60,10 @@ test("wrong state gets a 400 and does not resolve the login", async () => {
   expect(bad.status).toBe(400);
   // The flow is still pending — finish it legitimately.
   const good = await fetch(
-    `${callbackBase}?token=safe_ut_ok&tokenId=ut_2&state=${state}`,
+    `${callbackBase}?token=sg_ut_ok&tokenId=ut_2&state=${state}`,
   );
   expect(good.status).toBe(200);
-  expect(await login).toEqual({ token: "safe_ut_ok", tokenId: "ut_2" });
+  expect(await login).toEqual({ token: "sg_ut_ok", tokenId: "ut_2" });
 });
 
 test("missing token/tokenId params are rejected", async () => {
@@ -79,7 +79,7 @@ test("missing token/tokenId params are rejected", async () => {
   const res = await fetch(`${callbackBase}?state=${state}`);
   expect(res.status).toBe(400);
   const good = await fetch(
-    `${callbackBase}?token=safe_ut_ok&tokenId=ut_3&state=${state}`,
+    `${callbackBase}?token=sg_ut_ok&tokenId=ut_3&state=${state}`,
   );
   expect(good.status).toBe(200);
   await login;

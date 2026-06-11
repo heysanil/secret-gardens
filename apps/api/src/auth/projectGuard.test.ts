@@ -4,7 +4,7 @@ import type {
   InstanceRole,
   ProjectRole,
   ServiceTokenScope,
-} from "@safe/shared";
+} from "@secret-gardens/shared";
 import { newId, openDb, runMigrations } from "../db";
 import type { PrincipalResolution } from "./principal";
 import { resolveProjectAccess } from "./projectGuard";

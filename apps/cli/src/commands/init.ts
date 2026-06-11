@@ -1,15 +1,19 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as p from "@clack/prompts";
-import { createApiClient } from "@safe/api-client";
+import { createApiClient } from "@secret-gardens/api-client";
 import {
   classifyToken,
-  SAFE_CONFIG_FILENAME,
-  type SafeConfig,
-} from "@safe/shared";
+  GARDENS_CONFIG_FILENAME,
+  type GardensConfig,
+} from "@secret-gardens/shared";
 import { defineCommand } from "citty";
 import { call } from "../lib/api";
-import { discoverSafeConfig, resolveHost, resolveToken } from "../lib/context";
+import {
+  discoverGardensConfig,
+  resolveHost,
+  resolveToken,
+} from "../lib/context";
 import { readCredentials } from "../lib/credentials";
 import { CliError, wrapRun } from "../lib/errors";
 
@@ -54,12 +58,12 @@ function ensureEnvIgnored(cwd: string): "appended" | "created" | "already" {
 export const initCommand = defineCommand({
   meta: {
     name: "init",
-    description: `Link this directory to a project by writing ${SAFE_CONFIG_FILENAME}`,
+    description: `Link this directory to a project by writing ${GARDENS_CONFIG_FILENAME}`,
   },
   args: {
     host: {
       type: "string",
-      description: "Server URL, e.g. https://safe.example.com",
+      description: "Server URL, e.g. https://gardens.example.com",
     },
     project: {
       type: "string",
@@ -79,7 +83,7 @@ export const initCommand = defineCommand({
     const env = process.env;
     const cwd = process.cwd();
     const credentials = readCredentials(env);
-    const existing = discoverSafeConfig(cwd);
+    const existing = discoverGardensConfig(cwd);
     const host = resolveHost({
       flagHost: args.host,
       config: existing?.config ?? null,
@@ -89,14 +93,14 @@ export const initCommand = defineCommand({
     const token = resolveToken({ host, env, credentials });
     if (classifyToken(token) === "service") {
       throw new CliError(
-        "`safe init` needs a user identity — service tokens cannot list or create projects. Run `safe login` or set SAFE_TOKEN to a personal access token.",
+        "`gardens init` needs a user identity — service tokens cannot list or create projects. Run `gardens login` or set GARDENS_TOKEN to a personal access token.",
       );
     }
     const client = createApiClient({ baseUrl: host, token });
     const interactive = args.project === undefined || args.env === undefined;
 
     if (interactive) {
-      p.intro("safe init");
+      p.intro("gardens init");
     }
 
     // --- Pick or create the project -------------------------------------
@@ -181,15 +185,15 @@ export const initCommand = defineCommand({
       );
     }
 
-    // --- Write .safe.json -------------------------------------------------
-    const config: SafeConfig = {
+    // --- Write .gardens.json -------------------------------------------------
+    const config: GardensConfig = {
       host,
       project: project.slug,
       projectId: project.id,
       defaultEnvironment: envSlug,
     };
     writeFileSync(
-      join(cwd, SAFE_CONFIG_FILENAME),
+      join(cwd, GARDENS_CONFIG_FILENAME),
       `${JSON.stringify(config, null, 2)}\n`,
     );
 
@@ -212,7 +216,7 @@ export const initCommand = defineCommand({
           : ` (.env ${outcome === "created" ? "added to a new" : "appended to"} .gitignore)`;
     }
 
-    const summary = `Wrote ${SAFE_CONFIG_FILENAME} — project "${project.slug}", default environment "${envSlug}"${ignoreNote}.`;
+    const summary = `Wrote ${GARDENS_CONFIG_FILENAME} — project "${project.slug}", default environment "${envSlug}"${ignoreNote}.`;
     if (interactive) {
       p.outro(summary);
     } else {

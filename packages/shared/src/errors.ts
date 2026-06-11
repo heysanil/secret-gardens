@@ -1,7 +1,7 @@
-/** Thrown by parseSafeConfig when .safe.json is malformed or invalid. */
-export class SafeConfigError extends Error {
+/** Thrown by parseGardensConfig when .gardens.json is malformed or invalid. */
+export class GardensConfigError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "SafeConfigError";
+    this.name = "GardensConfigError";
   }
 }

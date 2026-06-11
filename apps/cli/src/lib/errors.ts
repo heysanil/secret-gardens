@@ -32,7 +32,7 @@ export function wrapRun<C>(
         process.exit(err.exitCode);
       }
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`safe: unexpected error: ${message}`);
+      console.error(`gardens: unexpected error: ${message}`);
       process.exit(1);
     }
   };

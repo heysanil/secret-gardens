@@ -1,7 +1,7 @@
 /**
- * Envelope-encryption primitives for safe.
+ * Envelope-encryption primitives for secret-gardens.
  *
- * Hierarchy: env-var KEK (SAFE_MASTER_KEY) → HKDF wrapping key →
+ * Hierarchy: env-var KEK (GARDENS_MASTER_KEY) → HKDF wrapping key →
  * per-project DEK (wrapped, stored in SQLite) → AES-256-GCM per secret
  * with AAD `projectId:envId:secretKey`.
  *

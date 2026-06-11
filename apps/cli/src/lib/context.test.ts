@@ -2,9 +2,9 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SafeConfig } from "@safe/shared";
+import type { GardensConfig } from "@secret-gardens/shared";
 import {
-  discoverSafeConfig,
+  discoverGardensConfig,
   normalizeHost,
   resolveEnvSlug,
   resolveHost,
@@ -16,7 +16,7 @@ import { CliError } from "./errors";
 const tempDirs: string[] = [];
 
 function tempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "safe-cli-ctx-"));
+  const dir = mkdtempSync(join(tmpdir(), "gardens-cli-ctx-"));
   tempDirs.push(dir);
   return dir;
 }
@@ -27,7 +27,7 @@ afterEach(() => {
   }
 });
 
-const CONFIG: SafeConfig = {
+const CONFIG: GardensConfig = {
   host: "https://config.example",
   project: "demo",
   projectId: "prj_1",
@@ -38,7 +38,7 @@ function credsWith(defaultHost?: string): CredentialsFile {
   const creds = emptyCredentials();
   if (defaultHost !== undefined) {
     creds.defaultHost = defaultHost;
-    creds.hosts[defaultHost] = { token: "safe_ut_stored" };
+    creds.hosts[defaultHost] = { token: "sg_ut_stored" };
   }
   return creds;
 }
@@ -53,36 +53,36 @@ test("normalizeHost strips trailing slashes", () => {
 
 test("normalizeHost rejects non-URLs and non-http schemes", () => {
   expect(() => normalizeHost("not a url", "--host")).toThrow(CliError);
-  expect(() => normalizeHost("ftp://a.example", "SAFE_HOST")).toThrow(
-    "SAFE_HOST",
+  expect(() => normalizeHost("ftp://a.example", "GARDENS_HOST")).toThrow(
+    "GARDENS_HOST",
   );
 });
 
-// --- host precedence: flag > .safe.json > SAFE_HOST > defaultHost > error ---
+// --- host precedence: flag > .gardens.json > GARDENS_HOST > defaultHost > error ---
 
 test("host: --host flag wins over everything", () => {
   const host = resolveHost({
     flagHost: "https://flag.example",
     config: CONFIG,
-    env: { SAFE_HOST: "https://env.example" },
+    env: { GARDENS_HOST: "https://env.example" },
     credentials: credsWith("https://default.example"),
   });
   expect(host).toBe("https://flag.example");
 });
 
-test("host: .safe.json beats SAFE_HOST and defaultHost", () => {
+test("host: .gardens.json beats GARDENS_HOST and defaultHost", () => {
   const host = resolveHost({
     config: CONFIG,
-    env: { SAFE_HOST: "https://env.example" },
+    env: { GARDENS_HOST: "https://env.example" },
     credentials: credsWith("https://default.example"),
   });
   expect(host).toBe("https://config.example");
 });
 
-test("host: SAFE_HOST beats credentials defaultHost", () => {
+test("host: GARDENS_HOST beats credentials defaultHost", () => {
   const host = resolveHost({
     config: null,
-    env: { SAFE_HOST: "https://env.example" },
+    env: { GARDENS_HOST: "https://env.example" },
     credentials: credsWith("https://default.example"),
   });
   expect(host).toBe("https://env.example");
@@ -100,27 +100,27 @@ test("host: falls back to credentials defaultHost", () => {
 test("host: nothing configured is a friendly error", () => {
   expect(() =>
     resolveHost({ config: null, env: {}, credentials: emptyCredentials() }),
-  ).toThrow("safe login");
+  ).toThrow("gardens login");
 });
 
-test("host: empty-string SAFE_HOST is ignored", () => {
+test("host: empty-string GARDENS_HOST is ignored", () => {
   const host = resolveHost({
     config: null,
-    env: { SAFE_HOST: "" },
+    env: { GARDENS_HOST: "" },
     credentials: credsWith("https://default.example"),
   });
   expect(host).toBe("https://default.example");
 });
 
-// --- token precedence: SAFE_TOKEN > credentials > error ---------------------
+// --- token precedence: GARDENS_TOKEN > credentials > error ---------------------
 
-test("token: SAFE_TOKEN wins over stored credentials", () => {
+test("token: GARDENS_TOKEN wins over stored credentials", () => {
   const token = resolveToken({
     host: "https://default.example",
-    env: { SAFE_TOKEN: "safe_st_env" },
+    env: { GARDENS_TOKEN: "sg_st_env" },
     credentials: credsWith("https://default.example"),
   });
-  expect(token).toBe("safe_st_env");
+  expect(token).toBe("sg_st_env");
 });
 
 test("token: falls back to credentials for the host", () => {
@@ -129,7 +129,7 @@ test("token: falls back to credentials for the host", () => {
     env: {},
     credentials: credsWith("https://default.example"),
   });
-  expect(token).toBe("safe_ut_stored");
+  expect(token).toBe("sg_ut_stored");
 });
 
 test("token: missing everywhere errors with the host name", () => {
@@ -142,13 +142,13 @@ test("token: missing everywhere errors with the host name", () => {
   ).toThrow("https://other.example");
 });
 
-test("token: empty SAFE_TOKEN is ignored", () => {
+test("token: empty GARDENS_TOKEN is ignored", () => {
   const token = resolveToken({
     host: "https://default.example",
-    env: { SAFE_TOKEN: "" },
+    env: { GARDENS_TOKEN: "" },
     credentials: credsWith("https://default.example"),
   });
-  expect(token).toBe("safe_ut_stored");
+  expect(token).toBe("sg_ut_stored");
 });
 
 // --- env slug: -e flag > defaultEnvironment > error --------------------------
@@ -157,7 +157,7 @@ test("env: -e flag wins over the config default", () => {
   expect(resolveEnvSlug("staging", CONFIG)).toBe("staging");
 });
 
-test("env: falls back to .safe.json defaultEnvironment", () => {
+test("env: falls back to .gardens.json defaultEnvironment", () => {
   expect(resolveEnvSlug(undefined, CONFIG)).toBe("dev");
 });
 
@@ -165,62 +165,62 @@ test("env: neither flag nor config is a friendly error", () => {
   expect(() => resolveEnvSlug(undefined, null)).toThrow("-e");
 });
 
-// --- .safe.json upward discovery ---------------------------------------------
+// --- .gardens.json upward discovery ---------------------------------------------
 
-test("discoverSafeConfig finds the file in the cwd itself", () => {
+test("discoverGardensConfig finds the file in the cwd itself", () => {
   const dir = tempDir();
-  writeFileSync(join(dir, ".safe.json"), JSON.stringify(CONFIG));
-  const found = discoverSafeConfig(dir);
+  writeFileSync(join(dir, ".gardens.json"), JSON.stringify(CONFIG));
+  const found = discoverGardensConfig(dir);
   expect(found?.config).toEqual(CONFIG);
-  expect(found?.path).toBe(join(dir, ".safe.json"));
+  expect(found?.path).toBe(join(dir, ".gardens.json"));
 });
 
-test("discoverSafeConfig walks up through nested directories", () => {
+test("discoverGardensConfig walks up through nested directories", () => {
   const root = tempDir();
-  writeFileSync(join(root, ".safe.json"), JSON.stringify(CONFIG));
+  writeFileSync(join(root, ".gardens.json"), JSON.stringify(CONFIG));
   const nested = join(root, "a", "b", "c");
   mkdirSync(nested, { recursive: true });
-  const found = discoverSafeConfig(nested);
-  expect(found?.path).toBe(join(root, ".safe.json"));
+  const found = discoverGardensConfig(nested);
+  expect(found?.path).toBe(join(root, ".gardens.json"));
 });
 
-test("discoverSafeConfig prefers the nearest config", () => {
+test("discoverGardensConfig prefers the nearest config", () => {
   const root = tempDir();
-  writeFileSync(join(root, ".safe.json"), JSON.stringify(CONFIG));
+  writeFileSync(join(root, ".gardens.json"), JSON.stringify(CONFIG));
   const nested = join(root, "inner");
   mkdirSync(nested);
   const innerConfig = { ...CONFIG, project: "inner-project" };
-  writeFileSync(join(nested, ".safe.json"), JSON.stringify(innerConfig));
-  expect(discoverSafeConfig(nested)?.config.project).toBe("inner-project");
+  writeFileSync(join(nested, ".gardens.json"), JSON.stringify(innerConfig));
+  expect(discoverGardensConfig(nested)?.config.project).toBe("inner-project");
 });
 
-test("discoverSafeConfig returns null when nothing is found up to the root", () => {
-  // A fresh temp dir whose ancestors (os tmp, /) carry no .safe.json.
-  expect(discoverSafeConfig(tempDir())).toBeNull();
+test("discoverGardensConfig returns null when nothing is found up to the root", () => {
+  // A fresh temp dir whose ancestors (os tmp, /) carry no .gardens.json.
+  expect(discoverGardensConfig(tempDir())).toBeNull();
 });
 
-test("discoverSafeConfig surfaces malformed JSON with the file path", () => {
+test("discoverGardensConfig surfaces malformed JSON with the file path", () => {
   const dir = tempDir();
-  const path = join(dir, ".safe.json");
+  const path = join(dir, ".gardens.json");
   writeFileSync(path, "{ nope");
-  expect(() => discoverSafeConfig(dir)).toThrow(CliError);
-  expect(() => discoverSafeConfig(dir)).toThrow(path);
+  expect(() => discoverGardensConfig(dir)).toThrow(CliError);
+  expect(() => discoverGardensConfig(dir)).toThrow(path);
 });
 
-test("discoverSafeConfig surfaces schema violations with the file path", () => {
+test("discoverGardensConfig surfaces schema violations with the file path", () => {
   const dir = tempDir();
-  const path = join(dir, ".safe.json");
+  const path = join(dir, ".gardens.json");
   writeFileSync(path, JSON.stringify({ host: "https://x.example" }));
-  expect(() => discoverSafeConfig(dir)).toThrow(path);
-  expect(() => discoverSafeConfig(dir)).toThrow("project");
+  expect(() => discoverGardensConfig(dir)).toThrow(path);
+  expect(() => discoverGardensConfig(dir)).toThrow("project");
 });
 
 test("a malformed config halts discovery instead of walking past it", () => {
   const root = tempDir();
-  writeFileSync(join(root, ".safe.json"), JSON.stringify(CONFIG));
+  writeFileSync(join(root, ".gardens.json"), JSON.stringify(CONFIG));
   const nested = join(root, "broken");
   mkdirSync(nested);
-  writeFileSync(join(nested, ".safe.json"), "not json");
+  writeFileSync(join(nested, ".gardens.json"), "not json");
   // The nearer (broken) file must error — not silently fall through to root.
-  expect(() => discoverSafeConfig(nested)).toThrow(CliError);
+  expect(() => discoverGardensConfig(nested)).toThrow(CliError);
 });

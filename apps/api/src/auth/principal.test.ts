@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash, randomBytes } from "node:crypto";
-import { TOKEN_PREFIXES } from "@safe/shared";
+import { TOKEN_PREFIXES } from "@secret-gardens/shared";
 import { createTestApp, signUp, type TestApp } from "../../test/testApp";
 import { TEST_REDIS_URL } from "../../test/testRedis";
 import { newId } from "../db";

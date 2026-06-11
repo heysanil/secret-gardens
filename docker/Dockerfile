@@ -1,4 +1,4 @@
-# safe — self-hosted secrets manager.
+# secret-gardens — self-hosted secrets manager.
 # Build from the REPO ROOT: docker build -f docker/Dockerfile .
 # (docker-compose.yml does this for you.)
 
@@ -57,8 +57,8 @@ COPY --from=build /app/apps/web/dist apps/web/dist
 RUN mkdir -p /data && chown bun:bun /data
 VOLUME /data
 
-ENV SAFE_WEB_DIST=/app/apps/web/dist \
-    SAFE_DB_PATH=/data/safe.db \
+ENV GARDENS_WEB_DIST=/app/apps/web/dist \
+    GARDENS_DB_PATH=/data/gardens.db \
     PORT=3000
 
 EXPOSE 3000

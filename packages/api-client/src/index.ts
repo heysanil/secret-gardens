@@ -1,5 +1,5 @@
 /**
- * Typed Eden treaty client for the safe API.
+ * Typed Eden treaty client for the secret-gardens API.
  *
  * Thin by design: Eden's `{ data, error, status }` response shape passes
  * through untouched — no retries, no unwrapping, no error classes. Auth
@@ -7,11 +7,11 @@
  * web app talks to them via better-auth/react).
  */
 import { treaty } from "@elysiajs/eden";
-import type { App } from "@safe/api";
+import type { App } from "@secret-gardens/api";
 
 export interface ApiClientOptions {
   /**
-   * Origin of the safe API, e.g. `https://safe.example.com`. Trailing
+   * Origin of the secret-gardens API, e.g. `https://gardens.example.com`. Trailing
    * slashes are normalized away.
    */
   baseUrl: string;
@@ -43,4 +43,4 @@ export function createApiClient(opts: ApiClientOptions) {
   });
 }
 
-export type { App } from "@safe/api";
+export type { App } from "@secret-gardens/api";

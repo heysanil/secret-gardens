@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, test } from "bun:test";
-import { generateMasterKey, loadMasterKey } from "@safe/crypto";
+import { generateMasterKey, loadMasterKey } from "@secret-gardens/crypto";
 import { openDb, runMigrations } from "../db";
 import { ensureKekCheck, KekCheckError } from "./kekCheck";
 
@@ -45,7 +45,7 @@ describe("ensureKekCheck", () => {
     const otherKey = loadMasterKey(generateMasterKey());
     expect(() => ensureKekCheck(db, otherKey)).toThrow(KekCheckError);
     expect(() => ensureKekCheck(db, otherKey)).toThrow(
-      /SAFE_MASTER_KEY does not match the key this database was initialized with/,
+      /GARDENS_MASTER_KEY does not match the key this database was initialized with/,
     );
   });
 

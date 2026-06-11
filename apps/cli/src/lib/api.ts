@@ -97,7 +97,7 @@ export function apiError(
 
   if (code === "decrypt_failed") {
     return new CliError(
-      `The server could not decrypt these secrets — its SAFE_MASTER_KEY has likely changed. Contact the server administrator.`,
+      `The server could not decrypt these secrets — its GARDENS_MASTER_KEY has likely changed. Contact the server administrator.`,
     );
   }
 
@@ -105,10 +105,10 @@ export function apiError(
     case 401:
       return code === "invalid_token"
         ? new CliError(
-            `Token rejected by ${host} — it may be expired or revoked. Run \`safe login\` again or fix SAFE_TOKEN.`,
+            `Token rejected by ${host} — it may be expired or revoked. Run \`gardens login\` again or fix GARDENS_TOKEN.`,
           )
         : new CliError(
-            `Not authenticated for ${host} — run \`safe login\` or set SAFE_TOKEN.`,
+            `Not authenticated for ${host} — run \`gardens login\` or set GARDENS_TOKEN.`,
           );
     case 403:
       return new CliError(

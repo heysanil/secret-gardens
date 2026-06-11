@@ -7,7 +7,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { MAX_BULK_SECRETS } from "@safe/shared";
+import { MAX_BULK_SECRETS } from "@secret-gardens/shared";
 import {
   api,
   createMemberUser,

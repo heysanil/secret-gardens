@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * Full-product e2e suite against a real `bun apps/api` instance serving the
- * built web UI (SAFE_WEB_DIST) on a dedicated port.
+ * built web UI (GARDENS_WEB_DIST) on a dedicated port.
  *
  * Bootstrap state (first-signup-becomes-owner) is global per server
  * instance, and the spec files build on each other's instance state in
@@ -28,7 +28,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
     // Fresh SQLite + fresh master key on every run; redis on 6380 comes from
-    // `docker compose -f compose.test.yml -p safe-test up -d --wait`.
+    // `docker compose -f compose.test.yml -p gardens-test up -d --wait`.
     command: "bun scripts/start-server.ts",
     url: `${BASE_URL}/api/health`,
     reuseExistingServer: false,

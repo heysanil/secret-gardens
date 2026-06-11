@@ -62,7 +62,7 @@ export function ServiceTokensSection({ project }: { project: ProjectDetail }) {
       ) : (tokens.data ?? []).length === 0 ? (
         <p className="rounded-lg border border-dashed border-line-strong px-4 py-6 text-center text-[13px] text-ink-faint">
           No service tokens. Create one to let CI run{" "}
-          <code className="text-ink-dim">safe pull</code>.
+          <code className="text-ink-dim">gardens pull</code>.
         </p>
       ) : (
         <ul className="flex flex-col">

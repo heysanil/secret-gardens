@@ -25,14 +25,14 @@ export const runCommand = defineCommand({
   meta: {
     name: "run",
     description:
-      "Run a command with secrets injected into its environment: safe run [-e <env>] -- <command> [args…]",
+      "Run a command with secrets injected into its environment: gardens run [-e <env>] -- <command> [args…]",
   },
   args: {
     env: {
       type: "string",
       alias: "e",
       description:
-        "Environment slug (defaults to .safe.json defaultEnvironment)",
+        "Environment slug (defaults to .gardens.json defaultEnvironment)",
     },
   },
   run: wrapRun(async (cmdCtx) => {
@@ -41,7 +41,7 @@ export const runCommand = defineCommand({
     const childArgv = sep === -1 ? [] : cmdCtx.rawArgs.slice(sep + 1);
     if (childArgv.length === 0) {
       throw new CliError(
-        "No command given — usage: safe run [-e <env>] -- <command> [args…]",
+        "No command given — usage: gardens run [-e <env>] -- <command> [args…]",
       );
     }
 

@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { type ProjectRole, resolveProjectRole } from "@safe/shared";
+import { type ProjectRole, resolveProjectRole } from "@secret-gardens/shared";
 import { Elysia, t } from "elysia";
 import { type Auth, principalPlugin } from "../auth";
 import { PROJECT_COLUMNS, type ProjectRow } from "../auth/projectGuard";

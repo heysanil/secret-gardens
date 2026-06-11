@@ -4,7 +4,7 @@
  * tests need.
  */
 import type { Database } from "bun:sqlite";
-import { generateMasterKey } from "@safe/crypto";
+import { generateMasterKey } from "@secret-gardens/crypto";
 import { type App, type AppDeps, createApp } from "../src/app";
 import { type Auth, createAuth, runAuthMigrations } from "../src/auth";
 import { type Config, loadConfig } from "../src/config";
@@ -26,7 +26,7 @@ export interface TestApp {
 /** Builds a fully migrated app over the given (already connected) Redis. */
 export async function createTestApp(redis: RedisLike): Promise<TestApp> {
   const config = loadConfig({
-    SAFE_MASTER_KEY: generateMasterKey(),
+    GARDENS_MASTER_KEY: generateMasterKey(),
     REDIS_URL: TEST_REDIS_URL,
     BETTER_AUTH_SECRET: crypto.randomUUID() + crypto.randomUUID(),
   });

@@ -6,7 +6,7 @@ import {
   type Principal,
   type ProjectRole,
   type ServiceTokenScope,
-} from "@safe/shared";
+} from "@secret-gardens/shared";
 import { Elysia } from "elysia";
 import type { Auth } from "./index";
 import { resolveProjectAccess, type ServiceAccessSpec } from "./projectGuard";
@@ -164,8 +164,8 @@ function resolveServiceToken(db: Database, token: string): PrincipalResolution {
 
 /**
  * Resolves the request's principal:
- *  1. `Authorization: Bearer safe_ut_…` → PAT lookup (sha256 hash).
- *     `Bearer safe_st_…` → service-token lookup (sha256 hash). Any other
+ *  1. `Authorization: Bearer sg_ut_…` → PAT lookup (sha256 hash).
+ *     `Bearer sg_st_…` → service-token lookup (sha256 hash). Any other
  *     Bearer value is invalid_token.
  *  2. Otherwise, better-auth cookie session.
  *  3. Neither → null principal (routes decide via guards).

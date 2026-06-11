@@ -1,5 +1,5 @@
 {
-  "name": "@safe/api",
+  "name": "@secret-gardens/api",
   "version": "0.0.1",
   "private": true,
   "license": "AGPL-3.0-only",
@@ -15,8 +15,8 @@
   },
   "dependencies": {
     "@elysiajs/static": "1.4.10",
-    "@safe/crypto": "workspace:*",
-    "@safe/shared": "workspace:*",
+    "@secret-gardens/crypto": "workspace:*",
+    "@secret-gardens/shared": "workspace:*",
     "better-auth": "1.6.16",
     "elysia": "^1.4.28"
   }

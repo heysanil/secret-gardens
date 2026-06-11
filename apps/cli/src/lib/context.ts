@@ -1,32 +1,32 @@
 /**
  * Centralized resolution rules (the only place precedence lives):
  *
- *   host:  --host flag → .safe.json host → SAFE_HOST env → credentials
+ *   host:  --host flag → .gardens.json host → GARDENS_HOST env → credentials
  *          defaultHost → error
- *   token: SAFE_TOKEN env (user or service) → credentials.hosts[host].token
+ *   token: GARDENS_TOKEN env (user or service) → credentials.hosts[host].token
  *          → error
- *   .safe.json: walked UP from cwd (like git) until the filesystem root
- *   env:   -e flag (slug) → .safe.json defaultEnvironment → error; the slug
+ *   .gardens.json: walked UP from cwd (like git) until the filesystem root
+ *   env:   -e flag (slug) → .gardens.json defaultEnvironment → error; the slug
  *          maps to an envId via GET /api/projects/:projectId (which the API
  *          filters for service tokens, so scoped tokens only ever see — and
  *          can only name — their allowed environments)
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { type ApiClient, createApiClient } from "@safe/api-client";
+import { type ApiClient, createApiClient } from "@secret-gardens/api-client";
 import {
-  parseSafeConfig,
-  SAFE_CONFIG_FILENAME,
-  type SafeConfig,
-  SafeConfigError,
-} from "@safe/shared";
+  GARDENS_CONFIG_FILENAME,
+  type GardensConfig,
+  GardensConfigError,
+  parseGardensConfig,
+} from "@secret-gardens/shared";
 import { call } from "./api";
 import { type CredentialsFile, type Env, readCredentials } from "./credentials";
 import { CliError } from "./errors";
 
 export interface DiscoveredConfig {
-  config: SafeConfig;
-  /** Absolute path of the .safe.json that was found. */
+  config: GardensConfig;
+  /** Absolute path of the .gardens.json that was found. */
   path: string;
 }
 
@@ -37,7 +37,7 @@ export function normalizeHost(raw: string, source: string): string {
     url = new URL(raw);
   } catch {
     throw new CliError(
-      `${source}: "${raw}" is not a valid URL — expected e.g. https://safe.example.com`,
+      `${source}: "${raw}" is not a valid URL — expected e.g. https://gardens.example.com`,
     );
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
@@ -47,14 +47,14 @@ export function normalizeHost(raw: string, source: string): string {
 }
 
 /**
- * Walks up from `cwd` to the filesystem root looking for .safe.json. A
+ * Walks up from `cwd` to the filesystem root looking for .gardens.json. A
  * malformed file is an error (with its path) rather than "keep walking" —
  * silently skipping it would run commands against a different project.
  */
-export function discoverSafeConfig(cwd: string): DiscoveredConfig | null {
+export function discoverGardensConfig(cwd: string): DiscoveredConfig | null {
   let dir = resolve(cwd);
   for (;;) {
-    const candidate = join(dir, SAFE_CONFIG_FILENAME);
+    const candidate = join(dir, GARDENS_CONFIG_FILENAME);
     let raw: string | null = null;
     try {
       raw = readFileSync(candidate, "utf8");
@@ -63,9 +63,9 @@ export function discoverSafeConfig(cwd: string): DiscoveredConfig | null {
     }
     if (raw !== null) {
       try {
-        return { config: parseSafeConfig(raw), path: candidate };
+        return { config: parseGardensConfig(raw), path: candidate };
       } catch (err) {
-        if (err instanceof SafeConfigError) {
+        if (err instanceof GardensConfigError) {
           throw new CliError(`${candidate}: ${err.message}`);
         }
         throw err;
@@ -81,7 +81,7 @@ export function discoverSafeConfig(cwd: string): DiscoveredConfig | null {
 
 export interface ResolveHostOptions {
   flagHost?: string | undefined;
-  config?: SafeConfig | null;
+  config?: GardensConfig | null;
   env?: Env;
   credentials?: CredentialsFile;
 }
@@ -91,18 +91,18 @@ export function resolveHost(opts: ResolveHostOptions): string {
     return normalizeHost(opts.flagHost, "--host");
   }
   if (opts.config != null) {
-    return normalizeHost(opts.config.host, SAFE_CONFIG_FILENAME);
+    return normalizeHost(opts.config.host, GARDENS_CONFIG_FILENAME);
   }
-  const envHost = opts.env?.SAFE_HOST;
+  const envHost = opts.env?.GARDENS_HOST;
   if (envHost !== undefined && envHost !== "") {
-    return normalizeHost(envHost, "SAFE_HOST");
+    return normalizeHost(envHost, "GARDENS_HOST");
   }
   const defaultHost = opts.credentials?.defaultHost;
   if (defaultHost !== undefined) {
     return defaultHost;
   }
   throw new CliError(
-    "No safe host configured — run `safe login --host <url>` or pass --host.",
+    "No secret-gardens host configured — run `gardens login --host <url>` or pass --host.",
   );
 }
 
@@ -113,7 +113,7 @@ export interface ResolveTokenOptions {
 }
 
 export function resolveToken(opts: ResolveTokenOptions): string {
-  const envToken = opts.env?.SAFE_TOKEN;
+  const envToken = opts.env?.GARDENS_TOKEN;
   if (envToken !== undefined && envToken !== "") {
     return envToken;
   }
@@ -122,13 +122,13 @@ export function resolveToken(opts: ResolveTokenOptions): string {
     return entry.token;
   }
   throw new CliError(
-    `Not authenticated for ${opts.host} — run \`safe login\` or set SAFE_TOKEN.`,
+    `Not authenticated for ${opts.host} — run \`gardens login\` or set GARDENS_TOKEN.`,
   );
 }
 
 export function resolveEnvSlug(
   flagEnv: string | undefined,
-  config: SafeConfig | null,
+  config: GardensConfig | null,
 ): string {
   if (flagEnv !== undefined && flagEnv !== "") {
     return flagEnv;
@@ -137,7 +137,7 @@ export function resolveEnvSlug(
     return config.defaultEnvironment;
   }
   throw new CliError(
-    "No environment specified — pass -e <env> or run `safe init` to set a default.",
+    "No environment specified — pass -e <env> or run `gardens init` to set a default.",
   );
 }
 
@@ -161,7 +161,7 @@ export function createCommandContext(
 ): CommandContext {
   const env = opts.env ?? process.env;
   const cwd = opts.cwd ?? process.cwd();
-  const config = discoverSafeConfig(cwd);
+  const config = discoverGardensConfig(cwd);
   const credentials = readCredentials(env);
   const host = resolveHost({
     flagHost: opts.flagHost,
@@ -174,11 +174,11 @@ export function createCommandContext(
   return { host, token, client, config, env };
 }
 
-/** Throws unless a .safe.json was discovered. */
+/** Throws unless a .gardens.json was discovered. */
 export function requireProjectConfig(ctx: CommandContext): DiscoveredConfig {
   if (ctx.config === null) {
     throw new CliError(
-      `No ${SAFE_CONFIG_FILENAME} found in this or any parent directory — run \`safe init\` first.`,
+      `No ${GARDENS_CONFIG_FILENAME} found in this or any parent directory — run \`gardens init\` first.`,
     );
   }
   return ctx.config;
@@ -203,7 +203,7 @@ export async function resolveEnvironment(
     ctx.host,
     ctx.client.api.projects({ projectId }).get(),
     {
-      notFound: `Project not found or no access — check "projectId" in ${SAFE_CONFIG_FILENAME} and your token.`,
+      notFound: `Project not found or no access — check "projectId" in ${GARDENS_CONFIG_FILENAME} and your token.`,
     },
   );
   const environments = detail.environments;

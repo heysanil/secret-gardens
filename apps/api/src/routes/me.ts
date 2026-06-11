@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
-import { TOKEN_PREFIXES } from "@safe/shared";
+import { TOKEN_PREFIXES } from "@secret-gardens/shared";
 import { Elysia, t } from "elysia";
 import { type Auth, principalPlugin } from "../auth";
 import { newId } from "../db";
@@ -13,7 +13,7 @@ export interface MeDeps {
 }
 
 const DAY_MS = 86_400_000;
-/** Display prefix stored alongside the hash: `safe_ut_` + 4 chars. */
+/** Display prefix stored alongside the hash: `sg_ut_` + 6 chars. */
 const TOKEN_DISPLAY_PREFIX_LEN = 12;
 /**
  * Server-side lifetime cap for PAT-minted PATs: min(30 days, the creating
@@ -38,7 +38,7 @@ interface UserTokenListRow {
  * /api/me + personal access token management.
  *
  * Decision: requests authenticated WITH a PAT may list/create/revoke tokens —
- * the CLI must be able to revoke its own token at `safe logout`.
+ * the CLI must be able to revoke its own token at `gardens logout`.
  */
 export function meRoutes(deps: MeDeps) {
   const { db, audit } = deps;

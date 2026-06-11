@@ -1,6 +1,6 @@
 /**
  * The /cli-auth loopback approval contract — approve, deny, and invalid
- * params — plus one full CLI↔browser round trip: the real `safe login`
+ * params — plus one full CLI↔browser round trip: the real `gardens login`
  * process prints its auth URL, the signed-in browser approves it, and the
  * CLI stores the minted token and can run `whoami`.
  */
@@ -63,7 +63,7 @@ test.describe
 
         expect(cb.requests).toHaveLength(1);
         const params = cb.requests[0]?.searchParams;
-        expect(params?.get("token")).toMatch(/^safe_ut_/);
+        expect(params?.get("token")).toMatch(/^sg_ut_/);
         expect(params?.get("tokenId")).toBeTruthy();
         expect(params?.get("state")).toBe("e2e-state-approve");
       } finally {
@@ -104,7 +104,7 @@ test.describe
       ).toBeVisible();
     });
 
-    test("full loop: real `safe login` approved from the browser", async ({
+    test("full loop: real `gardens login` approved from the browser", async ({
       page,
     }) => {
       const repoRoot = join(E2E_DIR, "..");
@@ -124,8 +124,8 @@ test.describe
         XDG_CONFIG_HOME: join(home, ".config"),
         PATH: `${fakeBin}:${process.env.PATH ?? ""}`,
       };
-      delete env.SAFE_TOKEN;
-      delete env.SAFE_HOST;
+      delete env.GARDENS_TOKEN;
+      delete env.GARDENS_HOST;
 
       let child: ChildProcess | null = null;
       try {
@@ -158,7 +158,7 @@ test.describe
           authUrl = stderrBuf.match(urlRe)?.[1] ?? null;
         } catch {
           console.warn(
-            "10-cli-auth: could not parse the /cli-auth URL from `safe login` " +
+            "10-cli-auth: could not parse the /cli-auth URL from `gardens login` " +
               `stderr; skipping the full-loop test. stderr was:\n${stderrBuf}`,
           );
           test.skip(true, "could not parse the CLI auth URL");
@@ -185,7 +185,7 @@ test.describe
           `Logged in to ${BASE_URL} as ${OWNER.email}`,
         );
 
-        // The stored credentials now drive `safe whoami`.
+        // The stored credentials now drive `gardens whoami`.
         const who = spawnSync("bun", [cliEntry, "whoami"], {
           cwd: home,
           env,

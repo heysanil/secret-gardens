@@ -92,9 +92,9 @@ export function AccountTokensPage() {
           <h1 className="text-xl font-semibold">Personal access tokens</h1>
           <p className="mt-0.5 max-w-xl text-[13px] text-ink-dim">
             Tokens act as you across every project you can access. The CLI
-            creates one automatically at <code>safe login</code>. Tokens created
-            with another token (instead of a browser session) are capped at 30
-            days.
+            creates one automatically at <code>gardens login</code>. Tokens
+            created with another token (instead of a browser session) are capped
+            at 30 days.
           </p>
         </div>
         <Button
@@ -111,7 +111,7 @@ export function AccountTokensPage() {
       ) : list.length === 0 ? (
         <EmptyState
           title="No personal tokens"
-          body="Create one to use the API directly, or run safe login to mint one through the CLI."
+          body="Create one to use the API directly, or run gardens login to mint one through the CLI."
         />
       ) : (
         <ul className="overflow-hidden rounded-xl border border-line">

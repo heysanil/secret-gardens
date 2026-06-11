@@ -1,5 +1,5 @@
 /**
- * safe API server — boot entrypoint.
+ * secret-gardens API server — boot entrypoint.
  * config → sqlite → better-auth migrations → our migrations → KEK boot-check
  * → redis → listen.
  */
@@ -34,7 +34,7 @@ async function main(): Promise<void> {
   }
   app.listen(config.port);
   console.log(
-    `safe api listening on port ${config.port} ` +
+    `secret-gardens api listening on port ${config.port} ` +
       `(public URL ${config.publicUrl}, kek ${config.masterKey.kekId})`,
   );
 
@@ -61,6 +61,6 @@ async function main(): Promise<void> {
 
 main().catch((err: unknown) => {
   const message = err instanceof Error ? err.message : String(err);
-  console.error(`safe api failed to start: ${message}`);
+  console.error(`secret-gardens api failed to start: ${message}`);
   process.exit(1);
 });

@@ -238,7 +238,7 @@ describe("round-trip: parseDotenv(serializeDotenv(x)) deep-equals x", () => {
       TRAILING: "ends with newline\n",
     },
     backslashes: {
-      WIN_PATH: "C:\\Users\\safe\\file.txt",
+      WIN_PATH: "C:\\Users\\gardens\\file.txt",
       DOUBLE: "a\\\\b",
       END: "ends\\",
     },

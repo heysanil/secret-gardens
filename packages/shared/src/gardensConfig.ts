@@ -1,13 +1,13 @@
-import { SafeConfigError } from "./errors";
+import { GardensConfigError } from "./errors";
 
-export interface SafeConfig {
+export interface GardensConfig {
   host: string;
   project: string;
   projectId: string;
   defaultEnvironment: string;
 }
 
-export const SAFE_CONFIG_FILENAME = ".safe.json";
+export const GARDENS_CONFIG_FILENAME = ".gardens.json";
 
 function isHttpUrl(value: string): boolean {
   let url: URL;
@@ -25,33 +25,35 @@ function requireNonEmptyString(
 ): string {
   const value = obj[field];
   if (typeof value !== "string" || value.length === 0) {
-    throw new SafeConfigError(
-      `${SAFE_CONFIG_FILENAME}: "${field}" must be a non-empty string`,
+    throw new GardensConfigError(
+      `${GARDENS_CONFIG_FILENAME}: "${field}" must be a non-empty string`,
     );
   }
   return value;
 }
 
 /**
- * Parses and validates a .safe.json document. Unknown fields are ignored.
- * Throws SafeConfigError with a field-specific message on any problem.
+ * Parses and validates a .gardens.json document. Unknown fields are ignored.
+ * Throws GardensConfigError with a field-specific message on any problem.
  */
-export function parseSafeConfig(json: string): SafeConfig {
+export function parseGardensConfig(json: string): GardensConfig {
   let data: unknown;
   try {
     data = JSON.parse(json);
   } catch {
-    throw new SafeConfigError(`${SAFE_CONFIG_FILENAME}: invalid JSON`);
+    throw new GardensConfigError(`${GARDENS_CONFIG_FILENAME}: invalid JSON`);
   }
   if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    throw new SafeConfigError(`${SAFE_CONFIG_FILENAME}: must be a JSON object`);
+    throw new GardensConfigError(
+      `${GARDENS_CONFIG_FILENAME}: must be a JSON object`,
+    );
   }
   const obj = data as Record<string, unknown>;
 
   const host = obj.host;
   if (typeof host !== "string" || !isHttpUrl(host)) {
-    throw new SafeConfigError(
-      `${SAFE_CONFIG_FILENAME}: "host" must be an http(s) URL, e.g. "https://safe.example.com"`,
+    throw new GardensConfigError(
+      `${GARDENS_CONFIG_FILENAME}: "host" must be an http(s) URL, e.g. "https://gardens.example.com"`,
     );
   }
 

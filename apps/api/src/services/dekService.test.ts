@@ -6,7 +6,7 @@ import {
   type PackedWrappedDek,
   unpackWrappedDek,
   unwrapDek,
-} from "@safe/crypto";
+} from "@secret-gardens/crypto";
 import { newId, openDb, runMigrations } from "../db";
 import {
   createDekService,

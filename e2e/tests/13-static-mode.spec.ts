@@ -1,6 +1,6 @@
 /**
  * Regression test: with the API serving the built web UI itself
- * (SAFE_WEB_DIST set — the production/docker mode), GET better-auth
+ * (GARDENS_WEB_DIST set — the production/docker mode), GET better-auth
  * endpoints must remain reachable.
  *
  * History: @elysiajs/static used to register a GET /* wildcard that
@@ -13,7 +13,7 @@
  * /api GETs from the SPA-fallback wildcard to the auth handler.
  *
  * The whole suite now runs in static mode (scripts/start-server.ts boots
- * the API with SAFE_WEB_DIST), but this test pins the exact failure mode
+ * the API with GARDENS_WEB_DIST), but this test pins the exact failure mode
  * against a dedicated instance.
  */
 import { type ChildProcess, spawn } from "node:child_process";
@@ -25,12 +25,12 @@ import { E2E_DIR } from "../helpers/constants";
 
 const STATIC_PORT = 3182;
 
-test.describe("static-mode serving (SAFE_WEB_DIST)", () => {
-  test("GET /api/auth/get-session works with SAFE_WEB_DIST set", async ({
+test.describe("static-mode serving (GARDENS_WEB_DIST)", () => {
+  test("GET /api/auth/get-session works with GARDENS_WEB_DIST set", async ({
     request,
   }) => {
     const repoRoot = join(E2E_DIR, "..");
-    const dbPath = join(E2E_DIR, ".tmp", "safe-static-mode.db");
+    const dbPath = join(E2E_DIR, ".tmp", "gardens-static-mode.db");
     rmSync(dbPath, { force: true });
 
     let child: ChildProcess | null = null;
@@ -39,12 +39,12 @@ test.describe("static-mode serving (SAFE_WEB_DIST)", () => {
         env: {
           ...process.env,
           PORT: String(STATIC_PORT),
-          SAFE_PUBLIC_URL: `http://localhost:${STATIC_PORT}`,
-          SAFE_DB_PATH: dbPath,
-          SAFE_MASTER_KEY: randomBytes(32).toString("base64"),
+          GARDENS_PUBLIC_URL: `http://localhost:${STATIC_PORT}`,
+          GARDENS_DB_PATH: dbPath,
+          GARDENS_MASTER_KEY: randomBytes(32).toString("base64"),
           BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
           REDIS_URL: "redis://localhost:6380",
-          SAFE_WEB_DIST: join(repoRoot, "apps", "web", "dist"),
+          GARDENS_WEB_DIST: join(repoRoot, "apps", "web", "dist"),
         },
         stdio: "ignore",
       });

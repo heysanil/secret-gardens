@@ -5,7 +5,7 @@ import {
   type ServicePrincipal,
   serviceTokenAllows,
   type UserPrincipal,
-} from "@safe/shared";
+} from "@secret-gardens/shared";
 import type { PrincipalErrorCode, PrincipalResolution } from "./principal";
 
 /** A row of the projects table, as handed to route handlers by the guard. */
@@ -33,7 +33,7 @@ const ROLE_RANK: Record<ProjectRole, number> = { read: 0, write: 1, admin: 2 };
  *    the route's :envId param (validated to belong to the project first).
  *  - 'project.read': DELIBERATE exception — a service token may read its own
  *    project's detail (filtered by the route handler) so CI can resolve
- *    environment slugs to ids for `safe pull`.
+ *    environment slugs to ids for `gardens pull`.
  */
 export interface ServiceAccessSpec {
   action: "secrets.read" | "secrets.write" | "project.read";

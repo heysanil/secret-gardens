@@ -1,4 +1,4 @@
-# safe e2e suite
+# secret-gardens e2e suite
 
 Full-product Playwright tests: every web flow plus one real CLI↔browser
 loopback login. They run against a real `apps/api` instance serving the
@@ -11,7 +11,7 @@ built web UI — no mocks anywhere.
    stack):
 
    ```sh
-   docker compose -f compose.test.yml -p safe-test up -d --wait
+   docker compose -f compose.test.yml -p gardens-test up -d --wait
    ```
 
 2. **Playwright chromium** (once per machine):
@@ -37,11 +37,11 @@ task) — it is slower, needs a browser, and owns global instance state.
 `playwright.config.ts` declares a `webServer` that runs
 `e2e/scripts/start-server.ts` with Bun. That script:
 
-1. builds `@safe/web` if `apps/web/dist` is missing,
-2. deletes and recreates a throwaway SQLite database (`e2e/.tmp/safe-e2e.db`),
-3. generates a fresh `SAFE_MASTER_KEY` + `BETTER_AUTH_SECRET`, and
+1. builds `@secret-gardens/web` if `apps/web/dist` is missing,
+2. deletes and recreates a throwaway SQLite database (`e2e/.tmp/gardens-e2e.db`),
+3. generates a fresh `GARDENS_MASTER_KEY` + `BETTER_AUTH_SECRET`, and
 4. boots the real, unmodified API in-process on port 3179 with
-   `REDIS_URL=redis://localhost:6380` and `SAFE_WEB_DIST=apps/web/dist` —
+   `REDIS_URL=redis://localhost:6380` and `GARDENS_WEB_DIST=apps/web/dist` —
    the production/docker topology, where the API serves the SPA itself.
 
 > Static mode used to be broken (the static plugin's `GET /*` wildcard

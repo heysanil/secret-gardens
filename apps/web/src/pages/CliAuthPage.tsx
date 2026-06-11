@@ -61,7 +61,7 @@ export function CliAuthPage() {
         <p className="mt-2 text-sm leading-relaxed text-ink-dim">
           {parsed.error} Close this tab and run{" "}
           <code className="rounded bg-raised px-1.5 py-px text-[12px]">
-            safe login
+            gardens login
           </code>{" "}
           again.
         </p>
@@ -84,7 +84,7 @@ export function CliAuthPage() {
   return (
     <Card>
       <h1 className="text-lg font-semibold">
-        <span className="text-accent">safe CLI</span> on{" "}
+        <span className="text-accent">gardens CLI</span> on{" "}
         <span className="font-mono text-base">{parsed.request.name}</span> is
         requesting access
       </h1>

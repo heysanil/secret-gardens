@@ -28,7 +28,7 @@ afterAll(() => {
   redis.close();
 });
 
-const SERVICE_TOKEN_RE = /^safe_st_[A-Za-z0-9_-]{43}$/;
+const SERVICE_TOKEN_RE = /^sg_st_[A-Za-z0-9_-]{43}$/;
 const DAY_MS = 86_400_000;
 
 let ctx: TestApp;

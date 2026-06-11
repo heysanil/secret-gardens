@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * safe CLI — Bearer-only client for the safe API. Commands are thin: all
+ * gardens CLI — Bearer-only client for the secret-gardens API. Commands are thin: all
  * host/token/env resolution lives in src/lib/context.ts.
  */
 import { defineCommand, runMain } from "citty";
@@ -17,9 +17,9 @@ import { whoamiCommand } from "./commands/whoami";
 
 export const main = defineCommand({
   meta: {
-    name: "safe",
+    name: "gardens",
     version: pkg.version,
-    description: "safe — self-hosted secrets manager",
+    description: "secret-gardens — self-hosted secrets manager",
   },
   subCommands: {
     login: loginCommand,

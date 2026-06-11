@@ -13,7 +13,7 @@ import {
 } from "bun:test";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { serializeDotenv } from "@safe/shared";
+import { serializeDotenv } from "@secret-gardens/shared";
 import {
   type ApiServer,
   cleanupTempDirs,
@@ -47,11 +47,11 @@ afterAll(() => {
   cleanupTempDirs();
 });
 
-describe("safe --version", () => {
+describe("gardens --version", () => {
   test("prints the package version", async () => {
     const res = await runCli(["--version"], {
-      cwd: tempDir("safe-cli-misc-"),
-      home: tempDir("safe-cli-home-"),
+      cwd: tempDir("gardens-cli-misc-"),
+      home: tempDir("gardens-cli-home-"),
     });
     expect(res.exitCode).toBe(0);
     expect(res.stdout.trim()).toBe("0.0.1");
@@ -60,8 +60,8 @@ describe("safe --version", () => {
 
 describe("login / whoami / logout", () => {
   test("token login, whoami, then logout revokes and removes the entry", async () => {
-    const home = tempDir("safe-cli-home-");
-    const cwd = tempDir("safe-cli-misc-");
+    const home = tempDir("gardens-cli-home-");
+    const cwd = tempDir("gardens-cli-misc-");
     const loginPat = await createPat(api.url, ownerCookie, "login-flow");
 
     // --- login --token -----------------------------------------------------
@@ -72,7 +72,7 @@ describe("login / whoami / logout", () => {
     expect(login.exitCode).toBe(0);
     expect(login.stdout).toContain(`Logged in to ${api.url} as ${ownerEmail}`);
 
-    const credsPath = join(home, ".config", "safe", "credentials.json");
+    const credsPath = join(home, ".config", "gardens", "credentials.json");
     expect(statSync(credsPath).mode & 0o777).toBe(0o600);
     const creds = JSON.parse(readFileSync(credsPath, "utf8")) as {
       version: number;
@@ -117,27 +117,27 @@ describe("login / whoami / logout", () => {
     );
     const res = await runCli(
       ["login", "--host", api.url, "--token", serviceToken],
-      { cwd: tempDir("safe-cli-misc-"), home: tempDir("safe-cli-home-") },
+      { cwd: tempDir("gardens-cli-misc-"), home: tempDir("gardens-cli-home-") },
     );
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain("Service tokens");
-    expect(res.stderr).toContain("SAFE_TOKEN");
+    expect(res.stderr).toContain("GARDENS_TOKEN");
   });
 
   test("login with a bad token fails without storing credentials", async () => {
-    const home = tempDir("safe-cli-home-");
+    const home = tempDir("gardens-cli-home-");
     const res = await runCli(
-      ["login", "--host", api.url, "--token", "safe_ut_bogus"],
-      { cwd: tempDir("safe-cli-misc-"), home },
+      ["login", "--host", api.url, "--token", "sg_ut_bogus"],
+      { cwd: tempDir("gardens-cli-misc-"), home },
     );
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain("expired or revoked");
     expect(() =>
-      statSync(join(home, ".config", "safe", "credentials.json")),
+      statSync(join(home, ".config", "gardens", "credentials.json")),
     ).toThrow();
   });
 
-  test("whoami with a service SAFE_TOKEN is an informative error", async () => {
+  test("whoami with a service GARDENS_TOKEN is an informative error", async () => {
     const project = await createProject(api.url, ownerCookie, "Whoami Svc");
     const serviceToken = await createServiceToken(
       api.url,
@@ -147,8 +147,8 @@ describe("login / whoami / logout", () => {
     );
     const res = await runCli(["whoami"], {
       cwd: makeWorkdir(api.url, project),
-      home: tempDir("safe-cli-home-"),
-      env: { SAFE_TOKEN: serviceToken },
+      home: tempDir("gardens-cli-home-"),
+      env: { GARDENS_TOKEN: serviceToken },
     });
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain("service token");
@@ -157,9 +157,9 @@ describe("login / whoami / logout", () => {
 });
 
 describe("init", () => {
-  test("--project --env --yes writes exact .safe.json and appends to .gitignore", async () => {
+  test("--project --env --yes writes exact .gardens.json and appends to .gitignore", async () => {
     const project = await createProject(api.url, ownerCookie, "Init Project");
-    const cwd = tempDir("safe-cli-init-");
+    const cwd = tempDir("gardens-cli-init-");
     writeFileSync(join(cwd, ".gitignore"), "node_modules\n");
 
     const res = await runCli(
@@ -173,7 +173,11 @@ describe("init", () => {
         "staging",
         "--yes",
       ],
-      { cwd, home: tempDir("safe-cli-home-"), env: { SAFE_TOKEN: pat.token } },
+      {
+        cwd,
+        home: tempDir("gardens-cli-home-"),
+        env: { GARDENS_TOKEN: pat.token },
+      },
     );
     expect(res.exitCode).toBe(0);
 
@@ -187,7 +191,7 @@ describe("init", () => {
       null,
       2,
     )}\n`;
-    expect(readFileSync(join(cwd, ".safe.json"), "utf8")).toBe(expected);
+    expect(readFileSync(join(cwd, ".gardens.json"), "utf8")).toBe(expected);
     expect(readFileSync(join(cwd, ".gitignore"), "utf8")).toBe(
       "node_modules\n.env\n",
     );
@@ -195,7 +199,7 @@ describe("init", () => {
 
   test("creates .gitignore when missing (documented choice)", async () => {
     const project = await createProject(api.url, ownerCookie, "Init NoIgnore");
-    const cwd = tempDir("safe-cli-init-");
+    const cwd = tempDir("gardens-cli-init-");
     const res = await runCli(
       [
         "init",
@@ -207,7 +211,11 @@ describe("init", () => {
         "dev",
         "--yes",
       ],
-      { cwd, home: tempDir("safe-cli-home-"), env: { SAFE_TOKEN: pat.token } },
+      {
+        cwd,
+        home: tempDir("gardens-cli-home-"),
+        env: { GARDENS_TOKEN: pat.token },
+      },
     );
     expect(res.exitCode).toBe(0);
     expect(readFileSync(join(cwd, ".gitignore"), "utf8")).toBe(".env\n");
@@ -215,7 +223,7 @@ describe("init", () => {
 
   test("leaves .gitignore alone when .env is already covered", async () => {
     const project = await createProject(api.url, ownerCookie, "Init Covered");
-    const cwd = tempDir("safe-cli-init-");
+    const cwd = tempDir("gardens-cli-init-");
     writeFileSync(join(cwd, ".gitignore"), ".env\nnode_modules\n");
     const res = await runCli(
       [
@@ -228,7 +236,11 @@ describe("init", () => {
         "dev",
         "--yes",
       ],
-      { cwd, home: tempDir("safe-cli-home-"), env: { SAFE_TOKEN: pat.token } },
+      {
+        cwd,
+        home: tempDir("gardens-cli-home-"),
+        env: { GARDENS_TOKEN: pat.token },
+      },
     );
     expect(res.exitCode).toBe(0);
     expect(readFileSync(join(cwd, ".gitignore"), "utf8")).toBe(
@@ -240,9 +252,9 @@ describe("init", () => {
     const res = await runCli(
       ["init", "--host", api.url, "--project", "nope", "--env", "dev", "--yes"],
       {
-        cwd: tempDir("safe-cli-init-"),
-        home: tempDir("safe-cli-home-"),
-        env: { SAFE_TOKEN: pat.token },
+        cwd: tempDir("gardens-cli-init-"),
+        home: tempDir("gardens-cli-home-"),
+        env: { GARDENS_TOKEN: pat.token },
       },
     );
     expect(res.exitCode).toBe(1);
@@ -263,9 +275,9 @@ describe("init", () => {
         "--yes",
       ],
       {
-        cwd: tempDir("safe-cli-init-"),
-        home: tempDir("safe-cli-home-"),
-        env: { SAFE_TOKEN: pat.token },
+        cwd: tempDir("gardens-cli-init-"),
+        home: tempDir("gardens-cli-home-"),
+        env: { GARDENS_TOKEN: pat.token },
       },
     );
     expect(res.exitCode).toBe(1);
@@ -292,9 +304,9 @@ describe("init", () => {
         "--yes",
       ],
       {
-        cwd: tempDir("safe-cli-init-"),
-        home: tempDir("safe-cli-home-"),
-        env: { SAFE_TOKEN: serviceToken },
+        cwd: tempDir("gardens-cli-init-"),
+        home: tempDir("gardens-cli-home-"),
+        env: { GARDENS_TOKEN: serviceToken },
       },
     );
     expect(res.exitCode).toBe(1);
@@ -321,8 +333,8 @@ describe("push / pull round-trip", () => {
   beforeAll(async () => {
     const project = await createProject(api.url, ownerCookie, "Roundtrip");
     cwd = makeWorkdir(api.url, project);
-    home = tempDir("safe-cli-home-");
-    env = { SAFE_TOKEN: pat.token };
+    home = tempDir("gardens-cli-home-");
+    env = { GARDENS_TOKEN: pat.token };
   });
 
   test("push reports per-key change counts", async () => {
@@ -422,8 +434,8 @@ describe("secrets list/get/set/rm", () => {
   beforeAll(async () => {
     const project = await createProject(api.url, ownerCookie, "Secrets Cmd");
     cwd = makeWorkdir(api.url, project);
-    home = tempDir("safe-cli-home-");
-    env = { SAFE_TOKEN: pat.token };
+    home = tempDir("gardens-cli-home-");
+    env = { GARDENS_TOKEN: pat.token };
   });
 
   test("set creates, then updates", async () => {
@@ -506,8 +518,8 @@ describe("run", () => {
   beforeAll(async () => {
     const project = await createProject(api.url, ownerCookie, "Run Cmd");
     cwd = makeWorkdir(api.url, project);
-    home = tempDir("safe-cli-home-");
-    env = { SAFE_TOKEN: pat.token };
+    home = tempDir("gardens-cli-home-");
+    env = { GARDENS_TOKEN: pat.token };
     const set = await runCli(["secrets", "set", "RUN_MARKER", MARKER_VALUE], {
       cwd,
       home,
@@ -557,7 +569,7 @@ describe("run", () => {
   test("run without -- <cmd> is a usage error", async () => {
     const res = await runCli(["run"], { cwd, home, env });
     expect(res.exitCode).toBe(1);
-    expect(res.stderr).toContain("safe run [-e <env>] -- <command>");
+    expect(res.stderr).toContain("gardens run [-e <env>] -- <command>");
   });
 });
 
@@ -571,7 +583,7 @@ describe("service tokens", () => {
   beforeAll(async () => {
     const project = await createProject(api.url, ownerCookie, "Service Toks");
     cwd = makeWorkdir(api.url, project);
-    home = tempDir("safe-cli-home-");
+    home = tempDir("gardens-cli-home-");
     const devEnv = project.environments.find((e) => e.slug === "dev");
     if (devEnv === undefined) throw new Error("dev env missing");
     [readToken, writeToken, scopedToken] = await Promise.all([
@@ -588,7 +600,7 @@ describe("service tokens", () => {
     const set = await runCli(["secrets", "set", "SVC_KEY", "svc-value"], {
       cwd,
       home,
-      env: { SAFE_TOKEN: pat.token },
+      env: { GARDENS_TOKEN: pat.token },
     });
     expect(set.exitCode).toBe(0);
   });
@@ -597,7 +609,7 @@ describe("service tokens", () => {
     const res = await runCli(["pull", "--out", "-"], {
       cwd,
       home,
-      env: { SAFE_TOKEN: readToken },
+      env: { GARDENS_TOKEN: readToken },
     });
     expect(res.exitCode).toBe(0);
     expect(res.stdout).toContain("SVC_KEY=svc-value");
@@ -608,7 +620,7 @@ describe("service tokens", () => {
     const res = await runCli(["push"], {
       cwd,
       home,
-      env: { SAFE_TOKEN: readToken },
+      env: { GARDENS_TOKEN: readToken },
     });
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain("Permission denied");
@@ -619,7 +631,7 @@ describe("service tokens", () => {
     const res = await runCli(["push"], {
       cwd,
       home,
-      env: { SAFE_TOKEN: writeToken },
+      env: { GARDENS_TOKEN: writeToken },
     });
     expect(res.exitCode).toBe(0);
     expect(res.stdout).toContain("1 created");
@@ -629,7 +641,7 @@ describe("service tokens", () => {
     const res = await runCli(["pull", "-e", "staging", "--out", "-"], {
       cwd,
       home,
-      env: { SAFE_TOKEN: scopedToken },
+      env: { GARDENS_TOKEN: scopedToken },
     });
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain('Environment "staging" not found');
@@ -642,7 +654,7 @@ describe("service tokens", () => {
     const res = await runCli(["pull", "-e", "dev", "--out", "-"], {
       cwd,
       home,
-      env: { SAFE_TOKEN: scopedToken },
+      env: { GARDENS_TOKEN: scopedToken },
     });
     expect(res.exitCode).toBe(0);
     expect(res.stdout).toContain("SVC_KEY=svc-value");
@@ -653,8 +665,8 @@ describe("rotate dek", () => {
   test("--yes rotates and reports versions + rewrite count; values survive", async () => {
     const project = await createProject(api.url, ownerCookie, "Rotate Proj");
     const cwd = makeWorkdir(api.url, project);
-    const home = tempDir("safe-cli-home-");
-    const env = { SAFE_TOKEN: pat.token };
+    const home = tempDir("gardens-cli-home-");
+    const env = { GARDENS_TOKEN: pat.token };
 
     writeFileSync(join(cwd, ".env"), "ROT_A=alpha\nROT_B=beta\n");
     expect((await runCli(["push"], { cwd, home, env })).exitCode).toBe(0);
@@ -685,18 +697,18 @@ describe("rotate dek", () => {
     );
     const res = await runCli(["rotate", "dek", "--yes"], {
       cwd: makeWorkdir(api.url, project),
-      home: tempDir("safe-cli-home-"),
-      env: { SAFE_TOKEN: serviceToken },
+      home: tempDir("gardens-cli-home-"),
+      env: { GARDENS_TOKEN: serviceToken },
     });
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain("Permission denied");
   });
 
-  test("--project <slug> works without any .safe.json", async () => {
+  test("--project <slug> works without any .gardens.json", async () => {
     const project = await createProject(api.url, ownerCookie, "Rotate Flag");
     const workdir = makeWorkdir(api.url, project);
-    const home = tempDir("safe-cli-home-");
-    const env = { SAFE_TOKEN: pat.token };
+    const home = tempDir("gardens-cli-home-");
+    const env = { GARDENS_TOKEN: pat.token };
     const set = await runCli(["secrets", "set", "FLAG_KEY", "flag-value"], {
       cwd: workdir,
       home,
@@ -704,13 +716,13 @@ describe("rotate dek", () => {
     });
     expect(set.exitCode).toBe(0);
 
-    // Bare directory: no .safe.json anywhere — host comes from SAFE_HOST.
+    // Bare directory: no .gardens.json anywhere — host comes from GARDENS_HOST.
     const res = await runCli(
       ["rotate", "dek", "--project", project.slug, "--yes"],
       {
-        cwd: tempDir("safe-cli-empty-"),
+        cwd: tempDir("gardens-cli-empty-"),
         home,
-        env: { ...env, SAFE_HOST: api.url },
+        env: { ...env, GARDENS_HOST: api.url },
       },
     );
     expect(res.exitCode).toBe(0);
@@ -721,9 +733,9 @@ describe("rotate dek", () => {
 
   test("--project with an unknown slug is a friendly error", async () => {
     const res = await runCli(["rotate", "dek", "--project", "ghost", "--yes"], {
-      cwd: tempDir("safe-cli-empty-"),
-      home: tempDir("safe-cli-home-"),
-      env: { SAFE_TOKEN: pat.token, SAFE_HOST: api.url },
+      cwd: tempDir("gardens-cli-empty-"),
+      home: tempDir("gardens-cli-home-"),
+      env: { GARDENS_TOKEN: pat.token, GARDENS_HOST: api.url },
     });
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain('Project "ghost" not found');
@@ -731,22 +743,22 @@ describe("rotate dek", () => {
 });
 
 describe("failure modes", () => {
-  test("unauthenticated (no SAFE_TOKEN, no credentials) is a friendly error", async () => {
+  test("unauthenticated (no GARDENS_TOKEN, no credentials) is a friendly error", async () => {
     const project = await createProject(api.url, ownerCookie, "Unauth Proj");
     const res = await runCli(["pull", "--out", "-"], {
       cwd: makeWorkdir(api.url, project),
-      home: tempDir("safe-cli-home-"),
+      home: tempDir("gardens-cli-home-"),
     });
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain(`Not authenticated for ${api.url}`);
-    expect(res.stderr).toContain("safe login");
+    expect(res.stderr).toContain("gardens login");
   });
 
   test("unreachable host is a friendly error, not a stack trace", async () => {
     const project = await createProject(api.url, ownerCookie, "DeadHost");
-    const cwd = tempDir("safe-cli-work-");
+    const cwd = tempDir("gardens-cli-work-");
     writeFileSync(
-      join(cwd, ".safe.json"),
+      join(cwd, ".gardens.json"),
       `${JSON.stringify(
         {
           host: "http://127.0.0.1:9",
@@ -760,28 +772,28 @@ describe("failure modes", () => {
     );
     const res = await runCli(["pull", "--out", "-"], {
       cwd,
-      home: tempDir("safe-cli-home-"),
-      env: { SAFE_TOKEN: pat.token },
+      home: tempDir("gardens-cli-home-"),
+      env: { GARDENS_TOKEN: pat.token },
     });
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain("Could not reach http://127.0.0.1:9");
     expect(res.stderr).not.toContain("    at "); // no stack frames
   });
 
-  test("missing .safe.json suggests safe init", async () => {
+  test("missing .gardens.json suggests gardens init", async () => {
     const res = await runCli(["pull", "--out", "-"], {
-      cwd: tempDir("safe-cli-empty-"),
-      home: tempDir("safe-cli-home-"),
-      env: { SAFE_TOKEN: pat.token, SAFE_HOST: api.url },
+      cwd: tempDir("gardens-cli-empty-"),
+      home: tempDir("gardens-cli-home-"),
+      env: { GARDENS_TOKEN: pat.token, GARDENS_HOST: api.url },
     });
     expect(res.exitCode).toBe(1);
-    expect(res.stderr).toContain("safe init");
+    expect(res.stderr).toContain("gardens init");
   });
 
-  test("a wrong projectId in .safe.json is 'project not found or no access'", async () => {
-    const cwd = tempDir("safe-cli-work-");
+  test("a wrong projectId in .gardens.json is 'project not found or no access'", async () => {
+    const cwd = tempDir("gardens-cli-work-");
     writeFileSync(
-      join(cwd, ".safe.json"),
+      join(cwd, ".gardens.json"),
       `${JSON.stringify(
         {
           host: api.url,
@@ -795,8 +807,8 @@ describe("failure modes", () => {
     );
     const res = await runCli(["pull", "--out", "-"], {
       cwd,
-      home: tempDir("safe-cli-home-"),
-      env: { SAFE_TOKEN: pat.token },
+      home: tempDir("gardens-cli-home-"),
+      env: { GARDENS_TOKEN: pat.token },
     });
     expect(res.exitCode).toBe(1);
     expect(res.stderr).toContain("Project not found or no access");

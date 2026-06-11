@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { generateMasterKey } from "@safe/crypto";
+import { generateMasterKey } from "@secret-gardens/crypto";
 import { ConfigError, loadConfig } from "./config";
 
 const validKey = generateMasterKey();
@@ -7,7 +7,7 @@ const validSecret = "a".repeat(32);
 
 /** Minimal valid env — tests spread this and override. */
 const baseEnv = {
-  SAFE_MASTER_KEY: validKey,
+  GARDENS_MASTER_KEY: validKey,
   BETTER_AUTH_SECRET: validSecret,
 };
 
@@ -16,7 +16,7 @@ describe("loadConfig", () => {
     const config = loadConfig({ ...baseEnv });
     expect(config.port).toBe(3000);
     expect(config.redisUrl).toBe("redis://localhost:6379");
-    expect(config.dbPath).toBe("./data/safe.db");
+    expect(config.dbPath).toBe("./data/gardens.db");
     expect(config.publicUrl).toBe("http://localhost:3000");
     expect(config.auditMaxLen).toBeNull();
     expect(config.masterKey.kekId).toMatch(/^[0-9a-f]{16}$/);
@@ -32,25 +32,25 @@ describe("loadConfig", () => {
       ...baseEnv,
       PORT: "8080",
       REDIS_URL: "redis://redis:6379",
-      SAFE_DB_PATH: "/data/safe.db",
-      SAFE_PUBLIC_URL: "https://safe.example.com",
-      SAFE_AUDIT_MAXLEN: "10000",
-      SAFE_WEB_DIST: "/app/apps/web/dist",
+      GARDENS_DB_PATH: "/data/gardens.db",
+      GARDENS_PUBLIC_URL: "https://gardens.example.com",
+      GARDENS_AUDIT_MAXLEN: "10000",
+      GARDENS_WEB_DIST: "/app/apps/web/dist",
     });
     expect(config.port).toBe(8080);
     expect(config.redisUrl).toBe("redis://redis:6379");
-    expect(config.dbPath).toBe("/data/safe.db");
-    expect(config.publicUrl).toBe("https://safe.example.com");
+    expect(config.dbPath).toBe("/data/gardens.db");
+    expect(config.publicUrl).toBe("https://gardens.example.com");
     expect(config.auditMaxLen).toBe(10000);
     expect(config.webDistPath).toBe("/app/apps/web/dist");
   });
 
-  test("treats an empty SAFE_WEB_DIST as disabled", () => {
-    const config = loadConfig({ ...baseEnv, SAFE_WEB_DIST: "" });
+  test("treats an empty GARDENS_WEB_DIST as disabled", () => {
+    const config = loadConfig({ ...baseEnv, GARDENS_WEB_DIST: "" });
     expect(config.webDistPath).toBeNull();
   });
 
-  describe("SAFE_MASTER_KEY validation", () => {
+  describe("GARDENS_MASTER_KEY validation", () => {
     const badKeys: Array<[string, string | undefined]> = [
       ["missing", undefined],
       ["empty", ""],
@@ -64,14 +64,14 @@ describe("loadConfig", () => {
           BETTER_AUTH_SECRET: validSecret,
         };
         if (value !== undefined) {
-          env.SAFE_MASTER_KEY = value;
+          env.GARDENS_MASTER_KEY = value;
         }
         expect(() => loadConfig(env)).toThrow(ConfigError);
         try {
           loadConfig(env);
         } catch (err) {
           const message = (err as Error).message;
-          expect(message).toContain("SAFE_MASTER_KEY");
+          expect(message).toContain("GARDENS_MASTER_KEY");
           expect(message).toContain("scripts/setup.sh");
         }
       });
@@ -81,7 +81,7 @@ describe("loadConfig", () => {
       const secretLooking = "this-is-my-secret-key-value-do-not-echo";
       try {
         loadConfig({
-          SAFE_MASTER_KEY: secretLooking,
+          GARDENS_MASTER_KEY: secretLooking,
           BETTER_AUTH_SECRET: validSecret,
         });
         expect.unreachable("should have thrown");
@@ -101,7 +101,7 @@ describe("loadConfig", () => {
     for (const [label, value] of badSecrets) {
       test(`rejects ${label} secret with an actionable message`, () => {
         const env: Record<string, string | undefined> = {
-          SAFE_MASTER_KEY: validKey,
+          GARDENS_MASTER_KEY: validKey,
         };
         if (value !== undefined) {
           env.BETTER_AUTH_SECRET = value;
@@ -180,14 +180,14 @@ describe("loadConfig", () => {
     }
   });
 
-  describe("SAFE_ADDITIONAL_ORIGINS validation", () => {
+  describe("GARDENS_ADDITIONAL_ORIGINS validation", () => {
     test("absent → empty list", () => {
       expect(loadConfig({ ...baseEnv }).additionalOrigins).toEqual([]);
     });
 
     test("empty string → empty list", () => {
       expect(
-        loadConfig({ ...baseEnv, SAFE_ADDITIONAL_ORIGINS: "" })
+        loadConfig({ ...baseEnv, GARDENS_ADDITIONAL_ORIGINS: "" })
           .additionalOrigins,
       ).toEqual([]);
     });
@@ -196,7 +196,7 @@ describe("loadConfig", () => {
       expect(
         loadConfig({
           ...baseEnv,
-          SAFE_ADDITIONAL_ORIGINS: "http://localhost:5173",
+          GARDENS_ADDITIONAL_ORIGINS: "http://localhost:5173",
         }).additionalOrigins,
       ).toEqual(["http://localhost:5173"]);
     });
@@ -205,7 +205,7 @@ describe("loadConfig", () => {
       expect(
         loadConfig({
           ...baseEnv,
-          SAFE_ADDITIONAL_ORIGINS:
+          GARDENS_ADDITIONAL_ORIGINS:
             " http://localhost:5173 , https://app.example.com/ ",
         }).additionalOrigins,
       ).toEqual(["http://localhost:5173", "https://app.example.com"]);
@@ -218,8 +218,8 @@ describe("loadConfig", () => {
     ] as const) {
       test(`rejects ${label}`, () => {
         expect(() =>
-          loadConfig({ ...baseEnv, SAFE_ADDITIONAL_ORIGINS: value }),
-        ).toThrow(/SAFE_ADDITIONAL_ORIGINS/);
+          loadConfig({ ...baseEnv, GARDENS_ADDITIONAL_ORIGINS: value }),
+        ).toThrow(/GARDENS_ADDITIONAL_ORIGINS/);
       });
     }
 
@@ -227,25 +227,25 @@ describe("loadConfig", () => {
       expect(() =>
         loadConfig({
           ...baseEnv,
-          SAFE_ADDITIONAL_ORIGINS: "ftp://example.com",
+          GARDENS_ADDITIONAL_ORIGINS: "ftp://example.com",
         }),
       ).toThrow(/http or https/);
     });
   });
 
-  describe("SAFE_AUDIT_MAXLEN validation", () => {
+  describe("GARDENS_AUDIT_MAXLEN validation", () => {
     for (const bad of ["abc", "0", "-5", "1.5", "", "10x"]) {
       test(`rejects ${JSON.stringify(bad)}`, () => {
         expect(() =>
-          loadConfig({ ...baseEnv, SAFE_AUDIT_MAXLEN: bad }),
-        ).toThrow(/SAFE_AUDIT_MAXLEN must be a positive integer/);
+          loadConfig({ ...baseEnv, GARDENS_AUDIT_MAXLEN: bad }),
+        ).toThrow(/GARDENS_AUDIT_MAXLEN must be a positive integer/);
       });
     }
 
     test("accepts a positive integer", () => {
       const config = loadConfig({
         ...baseEnv,
-        SAFE_AUDIT_MAXLEN: "500",
+        GARDENS_AUDIT_MAXLEN: "500",
       });
       expect(config.auditMaxLen).toBe(500);
     });

@@ -112,7 +112,13 @@ describe("MasterKey hygiene", () => {
     expect(JSON.parse(json)).toEqual({ kekId: mk.kekId });
 
     const wrappingKey = Buffer.from(
-      hkdfSync("sha256", raw, Buffer.alloc(0), "safe/v1/dek-wrap", 32),
+      hkdfSync(
+        "sha256",
+        raw,
+        Buffer.alloc(0),
+        "secret-gardens/v1/dek-wrap",
+        32,
+      ),
     );
     const forbidden = [
       raw.toString("hex"),

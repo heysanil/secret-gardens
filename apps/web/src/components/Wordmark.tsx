@@ -1,12 +1,12 @@
-/** The "safe." wordmark — pure typography, accent full stop. */
+/** The "secret gardens." wordmark — pure typography, accent full stop. */
 export function Wordmark({ size = "md" }: { size?: "md" | "lg" }) {
   return (
     <span
-      className={`font-bold tracking-tight text-ink select-none ${
+      className={`font-bold tracking-tight whitespace-nowrap text-ink select-none ${
         size === "lg" ? "text-4xl" : "text-xl"
       }`}
     >
-      safe<span className="text-accent">.</span>
+      secret&nbsp;gardens<span className="text-accent">.</span>
     </span>
   );
 }

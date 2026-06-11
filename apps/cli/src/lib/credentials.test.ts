@@ -23,7 +23,7 @@ import { CliError } from "./errors";
 const tempDirs: string[] = [];
 
 function tempEnv(): { env: { XDG_CONFIG_HOME: string }; dir: string } {
-  const dir = mkdtempSync(join(tmpdir(), "safe-cli-creds-"));
+  const dir = mkdtempSync(join(tmpdir(), "gardens-cli-creds-"));
   tempDirs.push(dir);
   return { env: { XDG_CONFIG_HOME: dir }, dir };
 }
@@ -36,19 +36,19 @@ afterEach(() => {
 
 test("credentialsPath honors XDG_CONFIG_HOME", () => {
   expect(credentialsPath({ XDG_CONFIG_HOME: "/xdg" })).toBe(
-    "/xdg/safe/credentials.json",
+    "/xdg/gardens/credentials.json",
   );
 });
 
 test("credentialsPath falls back to HOME/.config", () => {
   expect(credentialsPath({ HOME: "/home/me" })).toBe(
-    "/home/me/.config/safe/credentials.json",
+    "/home/me/.config/gardens/credentials.json",
   );
 });
 
 test("credentialsPath ignores empty XDG_CONFIG_HOME", () => {
   expect(credentialsPath({ XDG_CONFIG_HOME: "", HOME: "/home/me" })).toBe(
-    "/home/me/.config/safe/credentials.json",
+    "/home/me/.config/gardens/credentials.json",
   );
 });
 
@@ -63,8 +63,8 @@ test("write/read round-trip preserves the full shape", () => {
     version: 1 as const,
     defaultHost: "https://a.example",
     hosts: {
-      "https://a.example": { token: "safe_ut_aaa", tokenId: "ut_1" },
-      "https://b.example": { token: "safe_ut_bbb" },
+      "https://a.example": { token: "sg_ut_aaa", tokenId: "ut_1" },
+      "https://b.example": { token: "sg_ut_bbb" },
     },
   };
   writeCredentials(creds, env);

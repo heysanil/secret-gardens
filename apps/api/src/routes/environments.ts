@@ -24,7 +24,7 @@ interface EnvironmentRow {
 /**
  * Environment CRUD — project admins only. Slugs are immutable after
  * creation: ciphertext AAD is id-based so renames would be safe
- * cryptographically, but slug stability keeps CLI configs (.safe.json
+ * cryptographically, but slug stability keeps CLI configs (.gardens.json
  * defaultEnvironment) valid.
  */
 export function environmentsRoutes(deps: EnvironmentsDeps) {

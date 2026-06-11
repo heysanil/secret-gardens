@@ -1,11 +1,11 @@
 {
-  "name": "@safe/cli",
+  "name": "@secret-gardens/cli",
   "version": "0.0.1",
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",
   "bin": {
-    "safe": "./src/index.ts"
+    "gardens": "./src/index.ts"
   },
   "exports": {
     ".": "./src/index.ts"
@@ -18,8 +18,8 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.5.1",
-    "@safe/api-client": "workspace:*",
-    "@safe/shared": "workspace:*",
+    "@secret-gardens/api-client": "workspace:*",
+    "@secret-gardens/shared": "workspace:*",
     "citty": "^0.2.2"
   }
 }

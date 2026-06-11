@@ -4,7 +4,7 @@ import {
   packEncrypted,
   type SecretAad,
   unpackEncrypted,
-} from "@safe/crypto";
+} from "@secret-gardens/crypto";
 import type {
   CurrentSecret,
   SecretActor,

@@ -6,7 +6,7 @@ import {
   unpackWrappedDek,
   unwrapDek,
   wrapDek,
-} from "@safe/crypto";
+} from "@secret-gardens/crypto";
 import { newId } from "../db";
 
 /**
@@ -15,7 +15,7 @@ import { newId } from "../db";
  *
  * Caching: unwrapped DEKs are memoized in plain Maps. Everything here is
  * synchronous (bun:sqlite + node:crypto), so there is no single-flight
- * concern. Per @safe/crypto's unwrapDek ownership contract, cached buffers
+ * concern. Per @secret-gardens/crypto's unwrapDek ownership contract, cached buffers
  * are handed out by reference and must NEVER be zeroed (`fill(0)`) — shares
  * may still be in flight; disposal is left to GC.
  */

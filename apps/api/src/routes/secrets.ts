@@ -5,7 +5,7 @@ import {
   roleAllows,
   validateSecretKey,
   validateSecretValue,
-} from "@safe/shared";
+} from "@secret-gardens/shared";
 import { Elysia, t } from "elysia";
 import { type Auth, principalPlugin } from "../auth";
 import type { AuditLog } from "../redis/audit";

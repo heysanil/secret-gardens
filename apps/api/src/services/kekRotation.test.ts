@@ -6,7 +6,7 @@ import {
   loadMasterKey,
   packWrappedDek,
   wrapDek,
-} from "@safe/crypto";
+} from "@secret-gardens/crypto";
 import { newId, openDb, runMigrations } from "../db";
 import { createDekService } from "./dekService";
 import {

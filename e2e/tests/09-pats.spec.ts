@@ -22,7 +22,7 @@ test.describe
       const shown = page.getByTestId("token-show-once");
       await expect(shown).toBeVisible();
       patToken = (await shown.locator("code").innerText()).trim();
-      expect(patToken).toMatch(/^safe_ut_/);
+      expect(patToken).toMatch(/^sg_ut_/);
 
       await page.getByRole("button", { name: "Done" }).click();
       await expect(page.getByTestId("token-show-once")).toHaveCount(0);

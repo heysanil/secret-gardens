@@ -8,7 +8,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { generateMasterKey, loadMasterKey } from "@safe/crypto";
+import { generateMasterKey, loadMasterKey } from "@secret-gardens/crypto";
 import { TEST_REDIS_URL } from "../../test/testRedis";
 import { newId, openDb, runMigrations } from "../db";
 import { createRedis, type RedisLike } from "../redis/client";

@@ -55,7 +55,7 @@ describe("wrapDek / unwrapDek", () => {
     expect(() => unwrapDek(otherMk, w, projectId)).toThrow(KekMismatchError);
   });
 
-  test("KekMismatchError message mentions rotation and SAFE_MASTER_KEY", () => {
+  test("KekMismatchError message mentions rotation and GARDENS_MASTER_KEY", () => {
     const w = wrapDek(mk, generateDek(), projectId);
     const otherMk = loadMasterKey(generateMasterKey());
     let caught: unknown;
@@ -66,7 +66,7 @@ describe("wrapDek / unwrapDek", () => {
     }
     expect(caught).toBeInstanceOf(KekMismatchError);
     expect((caught as Error).name).toBe("KekMismatchError");
-    expect((caught as Error).message).toContain("SAFE_MASTER_KEY");
+    expect((caught as Error).message).toContain("GARDENS_MASTER_KEY");
     expect((caught as Error).message.toLowerCase()).toContain("rotat");
   });
 

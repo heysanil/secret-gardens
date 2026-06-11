@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
-import { type ServiceTokenScope, TOKEN_PREFIXES } from "@safe/shared";
+import { type ServiceTokenScope, TOKEN_PREFIXES } from "@secret-gardens/shared";
 import { Elysia, t } from "elysia";
 import { type Auth, principalPlugin } from "../auth";
 import { newId } from "../db";
@@ -13,7 +13,7 @@ export interface TokensDeps {
 }
 
 const DAY_MS = 86_400_000;
-/** Display prefix stored alongside the hash: `safe_st_` + 4 chars. */
+/** Display prefix stored alongside the hash: `sg_st_` + 6 chars. */
 const TOKEN_DISPLAY_PREFIX_LEN = 12;
 /** ~10 years — service tokens may be long-lived but never immortal-by-typo. */
 const MAX_EXPIRES_IN_DAYS = 3650;

@@ -16,7 +16,7 @@ function fail(status: number, value: unknown): Promise<FakeResponse> {
   return Promise.resolve({ data: null, error: { status, value }, status });
 }
 
-const HOST = "https://safe.example";
+const HOST = "https://gardens.example";
 
 async function messageOf(promise: Promise<unknown>): Promise<string> {
   try {
@@ -50,12 +50,12 @@ test("Eden's synthesized 503 (fetch Error as value) reads as unreachable host", 
   expect(message).toContain("fetch() failed");
 });
 
-test("401 unauthorized suggests safe login / SAFE_TOKEN", async () => {
+test("401 unauthorized suggests gardens login / GARDENS_TOKEN", async () => {
   const message = await messageOf(
     call(HOST, fail(401, { error: "unauthorized" })),
   );
   expect(message).toContain("Not authenticated");
-  expect(message).toContain("safe login");
+  expect(message).toContain("gardens login");
 });
 
 test("401 invalid_token mentions expiry/revocation", async () => {
@@ -110,11 +110,11 @@ test("422 lists offending environment ids", async () => {
   expect(message).toContain("env_9");
 });
 
-test("decrypt_failed points at SAFE_MASTER_KEY regardless of status", async () => {
+test("decrypt_failed points at GARDENS_MASTER_KEY regardless of status", async () => {
   const message = await messageOf(
     call(HOST, fail(500, { error: "decrypt_failed" })),
   );
-  expect(message).toContain("SAFE_MASTER_KEY");
+  expect(message).toContain("GARDENS_MASTER_KEY");
 });
 
 test("unknown statuses degrade to a generic API error", async () => {

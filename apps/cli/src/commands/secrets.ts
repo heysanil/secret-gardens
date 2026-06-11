@@ -13,7 +13,8 @@ import { wrapRun } from "../lib/errors";
 const ENV_ARG = {
   type: "string",
   alias: "e",
-  description: "Environment slug (defaults to .safe.json defaultEnvironment)",
+  description:
+    "Environment slug (defaults to .gardens.json defaultEnvironment)",
 } as const;
 
 interface ResolvedTarget {

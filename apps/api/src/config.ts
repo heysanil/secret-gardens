@@ -1,4 +1,8 @@
-import { loadMasterKey, type MasterKey, MasterKeyError } from "@safe/crypto";
+import {
+  loadMasterKey,
+  type MasterKey,
+  MasterKeyError,
+} from "@secret-gardens/crypto";
 
 /** Thrown for any invalid or missing configuration. Never echoes env values. */
 export class ConfigError extends Error {
@@ -26,7 +30,7 @@ export interface Config {
   /** Google OAuth credentials; null = provider disabled. */
   google: OAuthProviderConfig | null;
   /**
-   * Extra trusted origins for better-auth (SAFE_ADDITIONAL_ORIGINS,
+   * Extra trusted origins for better-auth (GARDENS_ADDITIONAL_ORIGINS,
    * comma-separated absolute http(s) URLs) — e.g. the Vite dev server
    * (http://localhost:5173) during development.
    */
@@ -34,7 +38,7 @@ export interface Config {
   /** XADD MAXLEN ~ threshold for audit streams; null = untrimmed. */
   auditMaxLen: number | null;
   /**
-   * Directory containing the built web UI (SAFE_WEB_DIST). When set, the
+   * Directory containing the built web UI (GARDENS_WEB_DIST). When set, the
    * API serves it at / with an SPA fallback; null (the default) disables
    * static serving entirely (development — Vite serves the web app).
    */
@@ -43,7 +47,7 @@ export interface Config {
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_REDIS_URL = "redis://localhost:6379";
-const DEFAULT_DB_PATH = "./data/safe.db";
+const DEFAULT_DB_PATH = "./data/gardens.db";
 const DEFAULT_PUBLIC_URL = "http://localhost:3000";
 
 const MIN_AUTH_SECRET_LENGTH = 32;
@@ -85,7 +89,7 @@ function parseOAuthPair(
 }
 
 /**
- * Parses SAFE_ADDITIONAL_ORIGINS: a comma-separated list of absolute
+ * Parses GARDENS_ADDITIONAL_ORIGINS: a comma-separated list of absolute
  * http(s) URLs, each normalized to its origin. Empty/absent → [].
  */
 function parseAdditionalOrigins(raw: string | undefined): string[] {
@@ -103,13 +107,13 @@ function parseAdditionalOrigins(raw: string | undefined): string[] {
       url = new URL(trimmed);
     } catch {
       throw new ConfigError(
-        "SAFE_ADDITIONAL_ORIGINS must be a comma-separated list of absolute " +
+        "GARDENS_ADDITIONAL_ORIGINS must be a comma-separated list of absolute " +
           "http(s) URLs (e.g. http://localhost:5173)",
       );
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       throw new ConfigError(
-        "SAFE_ADDITIONAL_ORIGINS entries must use http or https",
+        "GARDENS_ADDITIONAL_ORIGINS entries must use http or https",
       );
     }
     origins.push(url.origin);
@@ -129,20 +133,20 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     throw new ConfigError("PORT must be at most 65535");
   }
 
-  const auditMaxLenRaw = env.SAFE_AUDIT_MAXLEN;
+  const auditMaxLenRaw = env.GARDENS_AUDIT_MAXLEN;
   const auditMaxLen =
     auditMaxLenRaw === undefined
       ? null
-      : parsePositiveInt(auditMaxLenRaw, "SAFE_AUDIT_MAXLEN");
+      : parsePositiveInt(auditMaxLenRaw, "GARDENS_AUDIT_MAXLEN");
 
   let masterKey: MasterKey;
   try {
-    masterKey = loadMasterKey(env.SAFE_MASTER_KEY);
+    masterKey = loadMasterKey(env.GARDENS_MASTER_KEY);
   } catch (err) {
     if (err instanceof MasterKeyError) {
       // loadMasterKey messages describe the problem without echoing the value.
       throw new ConfigError(
-        `SAFE_MASTER_KEY is invalid: ${err.message}. ` +
+        `GARDENS_MASTER_KEY is invalid: ${err.message}. ` +
           "Run scripts/setup.sh to generate a valid key.",
       );
     }
@@ -173,18 +177,18 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
 
   return {
     port,
-    publicUrl: env.SAFE_PUBLIC_URL ?? DEFAULT_PUBLIC_URL,
+    publicUrl: env.GARDENS_PUBLIC_URL ?? DEFAULT_PUBLIC_URL,
     redisUrl: env.REDIS_URL ?? DEFAULT_REDIS_URL,
-    dbPath: env.SAFE_DB_PATH ?? DEFAULT_DB_PATH,
+    dbPath: env.GARDENS_DB_PATH ?? DEFAULT_DB_PATH,
     masterKey,
     authSecret,
     github,
     google,
-    additionalOrigins: parseAdditionalOrigins(env.SAFE_ADDITIONAL_ORIGINS),
+    additionalOrigins: parseAdditionalOrigins(env.GARDENS_ADDITIONAL_ORIGINS),
     auditMaxLen,
     webDistPath:
-      env.SAFE_WEB_DIST === undefined || env.SAFE_WEB_DIST === ""
+      env.GARDENS_WEB_DIST === undefined || env.GARDENS_WEB_DIST === ""
         ? null
-        : env.SAFE_WEB_DIST,
+        : env.GARDENS_WEB_DIST,
   };
 }

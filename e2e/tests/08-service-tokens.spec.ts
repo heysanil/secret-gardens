@@ -51,7 +51,7 @@ test.describe
       const shown = page.getByTestId("token-show-once");
       await expect(shown).toBeVisible();
       token = (await shown.locator("code").innerText()).trim();
-      expect(token).toMatch(/^safe_st_/);
+      expect(token).toMatch(/^sg_st_/);
 
       await page.getByTestId("token-done").click();
       await expect(page.getByTestId("token-show-once")).toHaveCount(0);

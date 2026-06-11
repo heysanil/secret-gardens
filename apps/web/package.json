@@ -1,5 +1,5 @@
 {
-  "name": "@safe/web",
+  "name": "@secret-gardens/web",
   "version": "0.0.1",
   "private": true,
   "license": "AGPL-3.0-only",
@@ -12,8 +12,8 @@
     "lint": "biome check ."
   },
   "dependencies": {
-    "@safe/api-client": "workspace:*",
-    "@safe/shared": "workspace:*",
+    "@secret-gardens/api-client": "workspace:*",
+    "@secret-gardens/shared": "workspace:*",
     "@tanstack/react-query": "^5.101.0",
     "better-auth": "1.6.16",
     "react": "^19.2.7",

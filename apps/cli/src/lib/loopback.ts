@@ -31,7 +31,7 @@ const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 const SUCCESS_HTML = `<!doctype html>
 <html lang="en">
-  <head><meta charset="utf-8"><title>safe</title></head>
+  <head><meta charset="utf-8"><title>secret gardens</title></head>
   <body style="font-family: system-ui, sans-serif; text-align: center; padding-top: 4rem;">
     <p><strong>Authenticated</strong> — you can close this tab and return to your terminal.</p>
   </body>
@@ -116,7 +116,7 @@ export async function loopbackLogin(
       settled = true;
       rejectResult(
         new CliError(
-          "Timed out waiting for the browser login — try again, or use `safe login --token <token>` with a personal access token.",
+          "Timed out waiting for the browser login — try again, or use `gardens login --token <token>` with a personal access token.",
         ),
       );
     }

@@ -14,7 +14,7 @@ const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
 
 function dekAad(projectId: string): Buffer {
-  return Buffer.from(`safe-dek:${projectId}`, "utf8");
+  return Buffer.from(`secret-gardens-dek:${projectId}`, "utf8");
 }
 
 export function generateDek(): Buffer {
@@ -59,7 +59,7 @@ export function unwrapDek(
   if (w.kekId !== mk.kekId) {
     throw new KekMismatchError(
       `wrapped DEK was created with KEK ${w.kekId} but the loaded master key is ${mk.kekId}; ` +
-        "check that SAFE_MASTER_KEY is correct, or finish rotating the KEK",
+        "check that GARDENS_MASTER_KEY is correct, or finish rotating the KEK",
     );
   }
   const wrappingKey = getWrappingKey(mk);

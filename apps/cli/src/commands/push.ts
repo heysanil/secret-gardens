@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { parseDotenv } from "@safe/shared";
+import { parseDotenv } from "@secret-gardens/shared";
 import { defineCommand } from "citty";
 import { call } from "../lib/api";
 import {
@@ -21,7 +21,7 @@ export const pushCommand = defineCommand({
       type: "string",
       alias: "e",
       description:
-        "Environment slug (defaults to .safe.json defaultEnvironment)",
+        "Environment slug (defaults to .gardens.json defaultEnvironment)",
     },
     file: {
       type: "string",

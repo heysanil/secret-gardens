@@ -1,5 +1,5 @@
 {
-  "name": "@safe/e2e",
+  "name": "@secret-gardens/e2e",
   "version": "0.0.1",
   "private": true,
   "license": "AGPL-3.0-only",
@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.60.0",
-    "@safe/crypto": "workspace:*",
+    "@secret-gardens/crypto": "workspace:*",
     "@types/node": "^25.9.3",
     "typescript": "~5.9.3"
   }

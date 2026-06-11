@@ -1,7 +1,7 @@
-import { createApiClient } from "@safe/api-client";
+import { createApiClient } from "@secret-gardens/api-client";
 import { defineCommand } from "citty";
 import { call } from "../lib/api";
-import { discoverSafeConfig, resolveHost } from "../lib/context";
+import { discoverGardensConfig, resolveHost } from "../lib/context";
 import { readCredentials, removeHostCredentials } from "../lib/credentials";
 import { CliError, wrapRun } from "../lib/errors";
 
@@ -15,7 +15,7 @@ export const logoutCommand = defineCommand({
   },
   run: wrapRun(async () => {
     const env = process.env;
-    const config = discoverSafeConfig(process.cwd());
+    const config = discoverGardensConfig(process.cwd());
     const credentials = readCredentials(env);
     const host = resolveHost({
       config: config?.config ?? null,

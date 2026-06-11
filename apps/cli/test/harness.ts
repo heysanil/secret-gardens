@@ -50,7 +50,7 @@ async function freePort(): Promise<number> {
  * is retried on a fresh port, up to 3 attempts.
  */
 export async function startApi(): Promise<ApiServer> {
-  const dataDir = tempDir("safe-cli-api-");
+  const dataDir = tempDir("gardens-cli-api-");
   let lastFailure = "";
 
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -61,11 +61,11 @@ export async function startApi(): Promise<ApiServer> {
         env: {
           ...process.env,
           PORT: String(port),
-          SAFE_MASTER_KEY: randomBytes(32).toString("base64"),
+          GARDENS_MASTER_KEY: randomBytes(32).toString("base64"),
           BETTER_AUTH_SECRET: randomBytes(32).toString("hex"),
           REDIS_URL: TEST_REDIS_URL,
-          SAFE_DB_PATH: join(dataDir, `safe-${attempt}.db`),
-          SAFE_PUBLIC_URL: `http://127.0.0.1:${port}`,
+          GARDENS_DB_PATH: join(dataDir, `gardens-${attempt}.db`),
+          GARDENS_PUBLIC_URL: `http://127.0.0.1:${port}`,
         },
         stdin: "ignore",
         stdout: "pipe",
@@ -203,14 +203,14 @@ export interface CliResult {
 
 export interface RunCliOptions {
   cwd: string;
-  /** Fake HOME — credentials land in `${home}/.config/safe/`. */
+  /** Fake HOME — credentials land in `${home}/.config/gardens/`. */
   home: string;
   env?: Record<string, string>;
 }
 
 /**
  * Runs the CLI as a real child process with a minimal environment: only
- * PATH/TMPDIR pass through, HOME is the per-test fake, SAFE_* only when the
+ * PATH/TMPDIR pass through, HOME is the per-test fake, GARDENS_* only when the
  * test sets them.
  */
 export async function runCli(
@@ -237,15 +237,15 @@ export async function runCli(
   return { exitCode, stdout, stderr };
 }
 
-/** Creates a project work dir containing a valid .safe.json. */
+/** Creates a project work dir containing a valid .gardens.json. */
 export function makeWorkdir(
   host: string,
   project: SeededProject,
   defaultEnvironment = "dev",
 ): string {
-  const dir = tempDir("safe-cli-work-");
+  const dir = tempDir("gardens-cli-work-");
   writeFileSync(
-    join(dir, ".safe.json"),
+    join(dir, ".gardens.json"),
     `${JSON.stringify(
       {
         host,

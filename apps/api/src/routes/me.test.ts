@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { TOKEN_PREFIXES } from "@safe/shared";
+import { TOKEN_PREFIXES } from "@secret-gardens/shared";
 import { createTestApp, signUp, type TestApp } from "../../test/testApp";
 import { TEST_REDIS_URL } from "../../test/testRedis";
 import { createRedis } from "../redis/client";
@@ -15,7 +15,7 @@ afterAll(() => {
   redis.close();
 });
 
-const PAT_RE = /^safe_ut_[A-Za-z0-9_-]{43}$/;
+const PAT_RE = /^sg_ut_[A-Za-z0-9_-]{43}$/;
 
 function uniqueEmail(tag: string): string {
   return `${tag}-${crypto.randomUUID()}@test.dev`;

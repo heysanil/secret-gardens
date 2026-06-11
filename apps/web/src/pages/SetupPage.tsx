@@ -48,7 +48,7 @@ export function SetupPage() {
   return (
     <AuthLayout
       heading="Create the admin account"
-      sub="You're setting up this safe instance. The first account becomes the instance owner; self-signup is disabled afterwards."
+      sub="You're setting up this secret-gardens instance. The first account becomes the instance owner; self-signup is disabled afterwards."
     >
       <form
         className="flex flex-col gap-4"

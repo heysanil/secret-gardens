@@ -177,7 +177,7 @@ export function SecretsTable({
           title="No secrets in this environment"
           body={
             canWrite
-              ? "Add your first secret below, or push a .env file with the CLI: safe push"
+              ? "Add your first secret below, or push a .env file with the CLI: gardens push"
               : "Nothing here yet. Someone with write access can add secrets."
           }
         />

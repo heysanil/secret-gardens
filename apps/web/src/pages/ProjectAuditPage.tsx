@@ -1,4 +1,4 @@
-import { PROJECT_AUDIT_ACTIONS } from "@safe/shared";
+import { PROJECT_AUDIT_ACTIONS } from "@secret-gardens/shared";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useOutletContext } from "react-router";

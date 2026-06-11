@@ -12,7 +12,7 @@ export interface MasterKey {
 const MASTER_KEY_BYTES = 32;
 const WRAPPING_KEY_BYTES = 32;
 const KEK_ID_HEX_CHARS = 16;
-const HKDF_INFO = "safe/v1/dek-wrap";
+const HKDF_INFO = "secret-gardens/v1/dek-wrap";
 
 /**
  * Holds the derived wrapping key in a #private field so it is invisible to
@@ -35,12 +35,12 @@ class MasterKeyImpl implements MasterKey {
   }
 }
 
-/** @internal — package-private; do not import outside @safe/crypto */
+/** @internal — package-private; do not import outside @secret-gardens/crypto */
 export function getWrappingKey(mk: MasterKey): Buffer {
   return MasterKeyImpl.wrappingKeyOf(mk);
 }
 
-/** Returns base64(randomBytes(32)) — used by setup.sh to mint SAFE_MASTER_KEY. */
+/** Returns base64(randomBytes(32)) — used by setup.sh to mint GARDENS_MASTER_KEY. */
 export function generateMasterKey(): string {
   return randomBytes(MASTER_KEY_BYTES).toString("base64");
 }

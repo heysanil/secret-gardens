@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# safe — first-run setup: generates .env with the master encryption key and
+# secret-gardens — first-run setup: generates .env with the master encryption key and
 # auth secret, ready for `docker compose up -d`.
 #
 # Usage: scripts/setup.sh [--force] [--url <public-url>]
@@ -43,7 +43,7 @@ done
 
 if [ -e "$env_file" ] && [ "$force" -ne 1 ]; then
   echo "error: $env_file already exists — refusing to overwrite it." >&2
-  echo "       It contains your SAFE_MASTER_KEY; losing that key means" >&2
+  echo "       It contains your GARDENS_MASTER_KEY; losing that key means" >&2
   echo "       losing all stored secrets. Re-run with --force only if you" >&2
   echo "       are sure (back the file up first)." >&2
   exit 1
@@ -57,7 +57,7 @@ fi
 if [ -z "$url" ]; then
   default_url="http://localhost:3000"
   if [ -t 0 ]; then
-    printf "Public URL of this safe instance [%s]: " "$default_url"
+    printf "Public URL of this secret-gardens instance [%s]: " "$default_url"
     read -r url || url=""
   fi
   url=${url:-$default_url}
@@ -80,14 +80,14 @@ cat > "$env_file" <<EOF
 # Used by docker-compose.yml. Keep this file out of version control.
 
 # Master encryption key (KEK). Every project key is wrapped with it.
-SAFE_MASTER_KEY="$master_key"
+GARDENS_MASTER_KEY="$master_key"
 
 # better-auth signing secret (sessions, cookies).
 BETTER_AUTH_SECRET="$auth_secret"
 
 # Public URL users reach this instance at. Must match the address in the
 # browser, or sign-in cookies and OAuth callbacks will fail.
-SAFE_PUBLIC_URL="$url"
+GARDENS_PUBLIC_URL="$url"
 BETTER_AUTH_URL="$url"
 EOF
 chmod 600 "$env_file"
@@ -97,7 +97,7 @@ cat <<EOF
 Wrote $env_file (mode 600).
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  !!  BACK UP SAFE_MASTER_KEY NOW (password manager / offline).    !!
+  !!  BACK UP GARDENS_MASTER_KEY NOW (password manager/offline).   !!
   !!  It encrypts every secret stored in this instance.            !!
   !!  If you lose it, ALL SECRETS ARE LOST PERMANENTLY.            !!
   !!  No backup of the database can recover them without this key. !!

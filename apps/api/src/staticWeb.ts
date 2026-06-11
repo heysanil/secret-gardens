@@ -5,7 +5,7 @@ import type { App } from "./app";
 import type { Auth } from "./auth";
 
 /**
- * Mounts the built web UI (config.webDistPath / SAFE_WEB_DIST) onto an
+ * Mounts the built web UI (config.webDistPath / GARDENS_WEB_DIST) onto an
  * already-composed app:
  *
  * - dist files are served via @elysiajs/static in `alwaysStatic` mode —

@@ -1,5 +1,11 @@
 # safe — Open-Source Secrets Manager: Design Spec
 
+> **Note (2026-06-11):** the project was renamed **safe → secret-gardens**
+> (CLI `gardens`, `GARDENS_*` env vars, `sg_st_`/`sg_ut_` token prefixes,
+> `.gardens.json` config, `@secret-gardens/*` workspace scope). This is the
+> historical design spec; the names below are pre-rename and are kept as
+> written.
+
 ## Context
 
 Build "safe", an open-source, self-hostable secrets management tool (Doppler/Infisical-style). Teams store secrets per project/environment, view and administer them in a web UI, and pull/push/inject them via a CLI — including in CI via scoped service tokens. Secrets are always encrypted at rest (envelope encryption; Redis only ever sees ciphertext) and in transit (TLS).

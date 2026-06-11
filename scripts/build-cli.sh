@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds self-contained `safe` CLI binaries (no Bun install needed to run)
-# into dist/cli/safe-<target> for the four release targets, then smoke-tests
+# Builds self-contained `gardens` CLI binaries (no Bun install needed to run)
+# into dist/cli/gardens-<target> for the four release targets, then smoke-tests
 # the binary matching the build machine.
 #
 # Usage: scripts/build-cli.sh
@@ -15,17 +15,17 @@ mkdir -p "$out_dir"
 
 targets="bun-linux-x64 bun-linux-arm64 bun-darwin-x64 bun-darwin-arm64"
 for target in $targets; do
-  out="$out_dir/safe-$target"
+  out="$out_dir/gardens-$target"
   echo "==> $out"
   bun build --compile --target="$target" "$entry" --outfile "$out"
 done
 
 # Verify the native-platform binary actually runs.
 case "$(uname -s)-$(uname -m)" in
-  Darwin-arm64) native="safe-bun-darwin-arm64" ;;
-  Darwin-x86_64) native="safe-bun-darwin-x64" ;;
-  Linux-aarch64 | Linux-arm64) native="safe-bun-linux-arm64" ;;
-  Linux-x86_64) native="safe-bun-linux-x64" ;;
+  Darwin-arm64) native="gardens-bun-darwin-arm64" ;;
+  Darwin-x86_64) native="gardens-bun-darwin-x64" ;;
+  Linux-aarch64 | Linux-arm64) native="gardens-bun-linux-arm64" ;;
+  Linux-x86_64) native="gardens-bun-linux-x64" ;;
   *) native="" ;;
 esac
 

@@ -1,4 +1,4 @@
-/** Base class for every error thrown by @safe/crypto. */
+/** Base class for every error thrown by @secret-gardens/crypto. */
 export class CryptoError extends Error {
   constructor(message: string) {
     super(message);

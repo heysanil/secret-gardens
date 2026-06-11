@@ -1,4 +1,4 @@
-import { validateSecretKey } from "@safe/shared";
+import { validateSecretKey } from "@secret-gardens/shared";
 import { useState } from "react";
 import { Button } from "../../components/Button";
 import { AutoTextarea, Input } from "../../components/Input";

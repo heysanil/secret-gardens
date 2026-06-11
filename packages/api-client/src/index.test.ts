@@ -24,8 +24,8 @@ function stubFetcher(captured: CapturedRequest[]): typeof fetch {
 test("injects Authorization: Bearer <token> when token is set", async () => {
   const captured: CapturedRequest[] = [];
   const client = createApiClient({
-    baseUrl: "http://safe.test",
-    token: "safe_ut_abc123",
+    baseUrl: "http://gardens.test",
+    token: "sg_ut_abc123",
     fetcher: stubFetcher(captured),
   });
 
@@ -33,13 +33,13 @@ test("injects Authorization: Bearer <token> when token is set", async () => {
 
   expect(captured).toHaveLength(1);
   const headers = new Headers(captured[0]?.init.headers);
-  expect(headers.get("authorization")).toBe("Bearer safe_ut_abc123");
+  expect(headers.get("authorization")).toBe("Bearer sg_ut_abc123");
 });
 
 test("sends no Authorization header when token is absent", async () => {
   const captured: CapturedRequest[] = [];
   const client = createApiClient({
-    baseUrl: "http://safe.test",
+    baseUrl: "http://gardens.test",
     fetcher: stubFetcher(captured),
   });
 
@@ -52,7 +52,7 @@ test("sends no Authorization header when token is absent", async () => {
 test("passes credentials through to fetch", async () => {
   const captured: CapturedRequest[] = [];
   const client = createApiClient({
-    baseUrl: "http://safe.test",
+    baseUrl: "http://gardens.test",
     credentials: "include",
     fetcher: stubFetcher(captured),
   });
@@ -65,8 +65,8 @@ test("passes credentials through to fetch", async () => {
 test("token and credentials compose on the same request", async () => {
   const captured: CapturedRequest[] = [];
   const client = createApiClient({
-    baseUrl: "http://safe.test",
-    token: "safe_st_xyz789",
+    baseUrl: "http://gardens.test",
+    token: "sg_st_xyz789",
     credentials: "omit",
     fetcher: stubFetcher(captured),
   });
@@ -74,16 +74,16 @@ test("token and credentials compose on the same request", async () => {
   await client.api.health.get();
 
   const headers = new Headers(captured[0]?.init.headers);
-  expect(headers.get("authorization")).toBe("Bearer safe_st_xyz789");
+  expect(headers.get("authorization")).toBe("Bearer sg_st_xyz789");
   expect(captured[0]?.init.credentials).toBe("omit");
 });
 
 test("baseUrl with and without trailing slashes hits the same URL", async () => {
   const urls: string[] = [];
   for (const baseUrl of [
-    "http://safe.test",
-    "http://safe.test/",
-    "http://safe.test///",
+    "http://gardens.test",
+    "http://gardens.test/",
+    "http://gardens.test///",
   ]) {
     const captured: CapturedRequest[] = [];
     const client = createApiClient({
@@ -94,16 +94,16 @@ test("baseUrl with and without trailing slashes hits the same URL", async () => 
     urls.push(captured[0]?.url ?? "");
   }
   expect(urls).toEqual([
-    "http://safe.test/api/health",
-    "http://safe.test/api/health",
-    "http://safe.test/api/health",
+    "http://gardens.test/api/health",
+    "http://gardens.test/api/health",
+    "http://gardens.test/api/health",
   ]);
 });
 
 test("Eden's { data, error, status } shape passes through untouched", async () => {
   const captured: CapturedRequest[] = [];
   const client = createApiClient({
-    baseUrl: "http://safe.test",
+    baseUrl: "http://gardens.test",
     fetcher: stubFetcher(captured),
   });
 
@@ -123,7 +123,7 @@ test("Eden's { data, error, status } shape passes through untouched", async () =
 type IsAny<T> = 0 extends 1 & T ? true : false;
 
 test("treaty client stays fully typed (no any-widening)", () => {
-  const client = createApiClient({ baseUrl: "http://safe.test" });
+  const client = createApiClient({ baseUrl: "http://gardens.test" });
 
   // Route accessors exist — referencing them is itself a tsc-level check.
   const projectsGet = client.api.projects.get;

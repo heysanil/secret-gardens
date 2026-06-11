@@ -3,7 +3,7 @@
  * KEK rotation — thin CLI wrapper around src/services/kekRotation.ts.
  *
  * Re-wraps every project DEK (active and retired) and the kek_check from
- * SAFE_MASTER_KEY to SAFE_MASTER_KEY_NEW, in one SQLite transaction.
+ * GARDENS_MASTER_KEY to GARDENS_MASTER_KEY_NEW, in one SQLite transaction.
  * Secrets in Redis are untouched: envelope encryption means they are
  * encrypted with per-project DEKs — only the DEK wrapping changes.
  *
@@ -11,11 +11,11 @@
  * be restarted:
  *
  *   docker compose run --rm \
- *     -e SAFE_MASTER_KEY_NEW="$(openssl rand -base64 32)" \
+ *     -e GARDENS_MASTER_KEY_NEW="$(openssl rand -base64 32)" \
  *     app bun apps/api/scripts/rotate-kek.ts
  *
- * or directly: SAFE_MASTER_KEY=... SAFE_MASTER_KEY_NEW=... \
- *   SAFE_DB_PATH=./data/safe.db bun apps/api/scripts/rotate-kek.ts
+ * or directly: GARDENS_MASTER_KEY=... GARDENS_MASTER_KEY_NEW=... \
+ *   GARDENS_DB_PATH=./data/gardens.db bun apps/api/scripts/rotate-kek.ts
  */
 import { existsSync } from "node:fs";
 import {
@@ -23,7 +23,7 @@ import {
   loadMasterKey,
   type MasterKey,
   MasterKeyError,
-} from "@safe/crypto";
+} from "@secret-gardens/crypto";
 import { openDb } from "../src/db";
 import { createAuditLog } from "../src/redis/audit";
 import { createRedis } from "../src/redis/client";
@@ -45,16 +45,16 @@ function loadKeyOrFail(name: string): MasterKey {
   }
 }
 
-const dbPath = process.env.SAFE_DB_PATH ?? "./data/safe.db";
+const dbPath = process.env.GARDENS_DB_PATH ?? "./data/gardens.db";
 if (!existsSync(dbPath)) {
   fail(
-    `no database at ${dbPath} (SAFE_DB_PATH) — point this script at the ` +
-      "SQLite file the safe API uses.",
+    `no database at ${dbPath} (GARDENS_DB_PATH) — point this script at the ` +
+      "SQLite file the secret-gardens API uses.",
   );
 }
 
-const oldKey = loadKeyOrFail("SAFE_MASTER_KEY");
-const newKey = loadKeyOrFail("SAFE_MASTER_KEY_NEW");
+const oldKey = loadKeyOrFail("GARDENS_MASTER_KEY");
+const newKey = loadKeyOrFail("GARDENS_MASTER_KEY_NEW");
 
 const db = openDb(dbPath);
 let result: ReturnType<typeof rotateKek>;
@@ -118,10 +118,10 @@ if (redisUrl === undefined || redisUrl === "") {
 }
 console.log(`
 Next steps:
-  1. Set SAFE_MASTER_KEY to the NEW key in your .env (replace the old value).
-  2. Remove SAFE_MASTER_KEY_NEW from the environment.
+  1. Set GARDENS_MASTER_KEY to the NEW key in your .env (replace the old value).
+  2. Remove GARDENS_MASTER_KEY_NEW from the environment.
   3. Restart the app (docker compose up -d).
-  4. BACK UP the new SAFE_MASTER_KEY somewhere safe — losing it means losing
+  4. BACK UP the new GARDENS_MASTER_KEY somewhere safe — losing it means losing
      all secrets permanently. The old key no longer decrypts anything.
 
 Secrets stored in Redis were not touched: they are encrypted with

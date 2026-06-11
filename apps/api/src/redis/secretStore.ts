@@ -1,4 +1,4 @@
-import type { AuditActorType } from "@safe/shared";
+import type { AuditActorType } from "@secret-gardens/shared";
 import type { RedisLike } from "./client";
 
 /**

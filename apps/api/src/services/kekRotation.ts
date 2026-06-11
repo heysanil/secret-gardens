@@ -7,7 +7,7 @@ import {
   unpackWrappedDek,
   unwrapDek,
   wrapDek,
-} from "@safe/crypto";
+} from "@secret-gardens/crypto";
 import { KEK_CHECK_AAD_ID, KEK_CHECK_SETTINGS_KEY } from "./kekCheck";
 
 /** Thrown when rotation cannot proceed; the transaction has rolled back. */
@@ -75,7 +75,7 @@ export function rotateKek(
     if (checkRow === null) {
       throw new KekRotationError(
         "instance_settings has no kek_check row — this database has never been " +
-          "booted by the safe API, so there is nothing to rotate.",
+          "booted by the secret-gardens API, so there is nothing to rotate.",
       );
     }
 

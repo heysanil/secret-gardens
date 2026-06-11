@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { serializeDotenv } from "@safe/shared";
+import { serializeDotenv } from "@secret-gardens/shared";
 import { defineCommand } from "citty";
 import {
   createCommandContext,
@@ -31,7 +31,7 @@ export const pullCommand = defineCommand({
       type: "string",
       alias: "e",
       description:
-        "Environment slug (defaults to .safe.json defaultEnvironment)",
+        "Environment slug (defaults to .gardens.json defaultEnvironment)",
     },
     out: {
       type: "string",

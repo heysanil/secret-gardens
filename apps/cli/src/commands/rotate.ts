@@ -10,7 +10,7 @@ import { CliError, wrapRun } from "../lib/errors";
 
 /**
  * Target project: --project <slug> resolves via the project list (no
- * .safe.json needed); otherwise .safe.json supplies it as usual.
+ * .gardens.json needed); otherwise .gardens.json supplies it as usual.
  */
 async function resolveRotateTarget(
   ctx: CommandContext,
@@ -42,7 +42,7 @@ const dekCommand = defineCommand({
   args: {
     project: {
       type: "string",
-      description: "Project slug (defaults to the .safe.json project)",
+      description: "Project slug (defaults to the .gardens.json project)",
     },
     yes: {
       type: "boolean",

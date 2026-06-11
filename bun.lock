@@ -12,35 +12,35 @@
       },
     },
     "apps/api": {
-      "name": "@safe/api",
+      "name": "@secret-gardens/api",
       "version": "0.0.1",
       "dependencies": {
         "@elysiajs/static": "1.4.10",
-        "@safe/crypto": "workspace:*",
-        "@safe/shared": "workspace:*",
+        "@secret-gardens/crypto": "workspace:*",
+        "@secret-gardens/shared": "workspace:*",
         "better-auth": "1.6.16",
         "elysia": "^1.4.28",
       },
     },
     "apps/cli": {
-      "name": "@safe/cli",
+      "name": "@secret-gardens/cli",
       "version": "0.0.1",
       "bin": {
-        "safe": "./src/index.ts",
+        "gardens": "./src/index.ts",
       },
       "dependencies": {
         "@clack/prompts": "^1.5.1",
-        "@safe/api-client": "workspace:*",
-        "@safe/shared": "workspace:*",
+        "@secret-gardens/api-client": "workspace:*",
+        "@secret-gardens/shared": "workspace:*",
         "citty": "^0.2.2",
       },
     },
     "apps/web": {
-      "name": "@safe/web",
+      "name": "@secret-gardens/web",
       "version": "0.0.1",
       "dependencies": {
-        "@safe/api-client": "workspace:*",
-        "@safe/shared": "workspace:*",
+        "@secret-gardens/api-client": "workspace:*",
+        "@secret-gardens/shared": "workspace:*",
         "@tanstack/react-query": "^5.101.0",
         "better-auth": "1.6.16",
         "react": "^19.2.7",
@@ -59,32 +59,32 @@
       },
     },
     "e2e": {
-      "name": "@safe/e2e",
+      "name": "@secret-gardens/e2e",
       "version": "0.0.1",
       "devDependencies": {
         "@playwright/test": "1.60.0",
-        "@safe/crypto": "workspace:*",
+        "@secret-gardens/crypto": "workspace:*",
         "@types/node": "^25.9.3",
         "typescript": "~5.9.3",
       },
     },
     "packages/api-client": {
-      "name": "@safe/api-client",
+      "name": "@secret-gardens/api-client",
       "version": "0.0.1",
       "dependencies": {
         "@elysiajs/eden": "1.4.9",
       },
       "devDependencies": {
-        "@safe/api": "workspace:*",
+        "@secret-gardens/api": "workspace:*",
         "elysia": "^1.4.28",
       },
     },
     "packages/crypto": {
-      "name": "@safe/crypto",
+      "name": "@secret-gardens/crypto",
       "version": "0.0.1",
     },
     "packages/shared": {
-      "name": "@safe/shared",
+      "name": "@secret-gardens/shared",
       "version": "0.0.1",
     },
   },
@@ -195,19 +195,19 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@safe/api": ["@safe/api@workspace:apps/api"],
+    "@secret-gardens/api": ["@secret-gardens/api@workspace:apps/api"],
 
-    "@safe/api-client": ["@safe/api-client@workspace:packages/api-client"],
+    "@secret-gardens/api-client": ["@secret-gardens/api-client@workspace:packages/api-client"],
 
-    "@safe/cli": ["@safe/cli@workspace:apps/cli"],
+    "@secret-gardens/cli": ["@secret-gardens/cli@workspace:apps/cli"],
 
-    "@safe/crypto": ["@safe/crypto@workspace:packages/crypto"],
+    "@secret-gardens/crypto": ["@secret-gardens/crypto@workspace:packages/crypto"],
 
-    "@safe/e2e": ["@safe/e2e@workspace:e2e"],
+    "@secret-gardens/e2e": ["@secret-gardens/e2e@workspace:e2e"],
 
-    "@safe/shared": ["@safe/shared@workspace:packages/shared"],
+    "@secret-gardens/shared": ["@secret-gardens/shared@workspace:packages/shared"],
 
-    "@safe/web": ["@safe/web@workspace:apps/web"],
+    "@secret-gardens/web": ["@secret-gardens/web@workspace:apps/web"],
 
     "@sinclair/typebox": ["@sinclair/typebox@0.34.49", "", {}, "sha512-brySQQs7Jtn0joV8Xh9ZV/hZb9Ozb0pmazDIASBkYKCjXrXU3mpcFahmK/z4YDhGkQvP9mWJbVyahdtU5wQA+A=="],
 
