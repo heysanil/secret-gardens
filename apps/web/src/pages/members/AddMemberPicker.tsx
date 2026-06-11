@@ -33,6 +33,7 @@ export function AddMemberPicker({
   const users = useQuery({
     queryKey: keys.users,
     queryFn: () => unwrap(api.api.users.get()),
+    staleTime: 60_000,
   });
 
   const add = useMutation({

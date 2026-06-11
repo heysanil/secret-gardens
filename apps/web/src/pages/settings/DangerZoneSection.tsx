@@ -21,8 +21,11 @@ export function DangerZoneSection({ project }: { project: ProjectDetail }) {
     onSuccess: (res) => {
       setConfirmRotate(false);
       // Cached plaintext values are unchanged by rotation, but drop them so
-      // nothing stale lingers if envs were mid-edit.
-      void queryClient.invalidateQueries({ queryKey: ["secret-values"] });
+      // nothing stale lingers if envs were mid-edit. The prefix matches the
+      // keys.secretValues entries of every env in this project.
+      void queryClient.invalidateQueries({
+        queryKey: ["secret-values", project.id],
+      });
       toast(
         `DEK rotated (v${res.oldVersion} → v${res.newVersion}); ${res.secretsRewritten} secrets re-encrypted`,
         "success",
@@ -41,6 +44,9 @@ export function DangerZoneSection({ project }: { project: ProjectDetail }) {
       setConfirmDelete(false);
       void queryClient.invalidateQueries({ queryKey: keys.projects });
       queryClient.removeQueries({ queryKey: keys.project(project.id) });
+      // Same hygiene as environment deletion: no decrypted values of a
+      // deleted project may linger in the cache.
+      queryClient.removeQueries({ queryKey: ["secret-values", project.id] });
       toast(`Project "${project.name}" deleted`, "success");
       navigate("/");
     },

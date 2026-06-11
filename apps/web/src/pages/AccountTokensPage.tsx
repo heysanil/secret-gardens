@@ -129,6 +129,14 @@ export function AccountTokensPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium">{t.name}</span>
+                    {t.createdVia === "token" && (
+                      <Badge
+                        tone="cyan"
+                        title="Created with a personal access token — the 30-day lifetime cap applied"
+                      >
+                        via CLI token
+                      </Badge>
+                    )}
                     {t.revokedAt !== null ? (
                       <Badge tone="danger">revoked</Badge>
                     ) : expired ? (

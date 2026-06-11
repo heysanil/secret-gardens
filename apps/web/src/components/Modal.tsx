@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { trapTabKey } from "./focusTrap";
 
 export interface ModalProps {
   open: boolean;
@@ -42,6 +43,10 @@ export function Modal({
       if (e.key === "Escape") {
         e.stopPropagation();
         onClose();
+        return;
+      }
+      if (panelRef.current !== null) {
+        trapTabKey(panelRef.current, e);
       }
     };
     document.addEventListener("keydown", onKey);

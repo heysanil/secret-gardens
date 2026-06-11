@@ -48,7 +48,12 @@ export function EnvironmentsSection({ project }: { project: ProjectDetail }) {
 
   const remove = useMutation({
     mutationFn: (envId: string) => unwrap(envApi({ envId }).delete()),
-    onSuccess: () => {
+    onSuccess: (_res, envId) => {
+      // Hygiene: drop the env's decrypted values from the query cache —
+      // plaintext of deleted secrets must not linger in the heap.
+      queryClient.removeQueries({
+        queryKey: keys.secretValues(project.id, envId),
+      });
       invalidate();
       setDeleting(null);
       toast("Environment deleted", "success");
