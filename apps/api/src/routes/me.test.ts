@@ -51,6 +51,23 @@ function createToken(
   );
 }
 
+function createTokenViaBearer(
+  ctx: TestApp,
+  bearer: string,
+  body: Record<string, unknown>,
+) {
+  return ctx.app.handle(
+    new Request("http://localhost/api/me/tokens", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${bearer}`,
+      },
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
 function deleteToken(ctx: TestApp, cookie: string, id: string) {
   return ctx.app.handle(
     new Request(`http://localhost/api/me/tokens/${id}`, {
@@ -173,25 +190,37 @@ describe("personal access tokens", () => {
     const created = (await (
       await createToken(ctx, cookie, { name: "listed token" })
     ).json()) as { id: string; token: string };
+    // A PAT-minted child carries created_via 'token' in the listing.
+    const child = (await (
+      await createTokenViaBearer(ctx, created.token, { name: "pat child" })
+    ).json()) as { id: string; token: string };
 
     const res = await get(ctx, "/api/me/tokens", { cookie });
     expect(res.status).toBe(200);
     const text = await res.text();
-    const list = JSON.parse(text) as Array<Record<string, unknown>>;
-    expect(list).toHaveLength(1);
-    expect(list[0]).toEqual({
+    const list = JSON.parse(text) as Array<
+      { id: string } & Record<string, unknown>
+    >;
+    expect(list).toHaveLength(2);
+    expect(list.find((t) => t.id === created.id)).toEqual({
       id: created.id,
       name: "listed token",
       tokenPrefix: created.token.slice(0, 12),
       createdAt: expect.any(Number),
       expiresAt: null,
-      lastUsedAt: null,
+      lastUsedAt: expect.any(Number),
       revokedAt: null,
+      createdVia: "session",
     });
-    expect(text).not.toContain(created.token);
-    expect(text).not.toContain(
-      createHash("sha256").update(created.token).digest("hex"),
-    );
+    expect(list.find((t) => t.id === child.id)).toMatchObject({
+      createdVia: "token",
+    });
+    for (const token of [created.token, child.token]) {
+      expect(text).not.toContain(token);
+      expect(text).not.toContain(
+        createHash("sha256").update(token).digest("hex"),
+      );
+    }
     ctx.close();
   });
 
@@ -371,23 +400,6 @@ describe("PAT-minted token lifetime cap", () => {
           "SELECT created_via FROM user_tokens WHERE id = ?",
         )
         .get(id)?.created_via ?? null
-    );
-  }
-
-  function createTokenViaBearer(
-    ctx: TestApp,
-    bearer: string,
-    body: Record<string, unknown>,
-  ) {
-    return ctx.app.handle(
-      new Request("http://localhost/api/me/tokens", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${bearer}`,
-        },
-        body: JSON.stringify(body),
-      }),
     );
   }
 

@@ -95,6 +95,44 @@ export function secretsRoutes(deps: SecretsDeps) {
           },
         },
       )
+      .get(
+        "/:key",
+        async ({ project, principal, params, query, status }) => {
+          const envId = findEnvId(project.id, params.envId);
+          if (envId === null) {
+            return status(404, { error: "not_found" });
+          }
+          const includeValue = query.include_value === "true";
+          const secret = await secretService.getSecret(
+            project.id,
+            envId,
+            params.key,
+            { includeValue },
+          );
+          if (secret === null) {
+            return status(404, { error: "not_found" });
+          }
+          if (includeValue) {
+            const actor = actorOf(principal);
+            await audit.appendAudit(
+              { projectId: project.id },
+              {
+                action: "secrets.read",
+                actorType: actor.type,
+                actorId: actor.id,
+                fields: { envId, key: params.key },
+              },
+            );
+          }
+          return secret;
+        },
+        {
+          requireProjectAction: {
+            minRole: "read",
+            serviceAction: "secrets.read",
+          },
+        },
+      )
       .put(
         "/",
         async ({ project, principal, params, body, status }) => {

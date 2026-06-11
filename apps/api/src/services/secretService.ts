@@ -108,6 +108,13 @@ export interface SecretService {
     envId: string,
     opts: { includeValues?: boolean },
   ): Promise<SecretEntry[]>;
+  /** Single current secret; null when the key has no current value. */
+  getSecret(
+    projectId: string,
+    envId: string,
+    key: string,
+    opts: { includeValue?: boolean },
+  ): Promise<SecretEntry | null>;
   getSecretVersions(
     projectId: string,
     envId: string,
@@ -302,6 +309,23 @@ export function createSecretService(deps: SecretServiceDeps): SecretService {
         entries.push(entry);
       }
       return entries;
+    },
+
+    async getSecret(projectId, envId, key, { includeValue = false }) {
+      const record = await secretStore.getCurrent(projectId, envId, key);
+      if (record === null) {
+        return null;
+      }
+      const entry: SecretEntry = {
+        key,
+        version: record.v,
+        updatedAt: record.updatedAt,
+        updatedBy: record.updatedBy,
+      };
+      if (includeValue) {
+        entry.value = decryptRecord(projectId, envId, key, record);
+      }
+      return entry;
     },
 
     async getSecretVersions(projectId, envId, key, { includeValues = false }) {

@@ -31,6 +31,7 @@ interface UserTokenListRow {
   expires_at: number | null;
   last_used_at: number | null;
   revoked_at: number | null;
+  created_via: "session" | "token";
 }
 
 /**
@@ -128,7 +129,7 @@ export function meRoutes(deps: MeDeps) {
       ({ principal }) => {
         const rows = db
           .query<UserTokenListRow, [string]>(
-            `SELECT id, name, token_prefix, created_at, expires_at, last_used_at, revoked_at
+            `SELECT id, name, token_prefix, created_at, expires_at, last_used_at, revoked_at, created_via
              FROM user_tokens WHERE user_id = ?
              ORDER BY created_at DESC, id`,
           )
@@ -141,6 +142,7 @@ export function meRoutes(deps: MeDeps) {
           expiresAt: row.expires_at,
           lastUsedAt: row.last_used_at,
           revokedAt: row.revoked_at,
+          createdVia: row.created_via,
         }));
       },
       { requireAuth: true },

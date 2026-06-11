@@ -10,6 +10,7 @@ import {
 import { MAX_BULK_SECRETS } from "@safe/shared";
 import {
   api,
+  createMemberUser,
   createTestApp,
   signUpUser,
   type TestApp,
@@ -219,6 +220,153 @@ describe("single-key routes", () => {
       expect(res.status).toBe(404);
       expect(await res.json()).toEqual({ error: "not_found" });
     }
+  });
+});
+
+describe("GET /:key (single-secret read)", () => {
+  test("metadata by default; include_value=true round-trips the value", async () => {
+    await api(ctx.app, "PUT", base("/K"), { cookie, body: { value: "shh" } });
+
+    const meta = await api(ctx.app, "GET", base("/K"), { cookie });
+    expect(meta.status).toBe(200);
+    expect(await meta.json()).toEqual({
+      key: "K",
+      version: 1,
+      updatedAt: expect.any(Number),
+      updatedBy: expect.any(String),
+    });
+
+    const values = await api(
+      ctx.app,
+      "GET",
+      `${base("/K")}?include_value=true`,
+      {
+        cookie,
+      },
+    );
+    expect(values.status).toBe(200);
+    const body = (await values.json()) as { key: string; value?: string };
+    expect(body.key).toBe("K");
+    expect(body.value).toBe("shh");
+  });
+
+  test("unknown key → 404; tombstoned key → 404", async () => {
+    const missing = await api(ctx.app, "GET", base("/NOPE"), { cookie });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ error: "not_found" });
+
+    await api(ctx.app, "PUT", base("/GONE"), { cookie, body: { value: "x" } });
+    await api(ctx.app, "DELETE", base("/GONE"), { cookie });
+    const deleted = await api(ctx.app, "GET", base("/GONE"), { cookie });
+    expect(deleted.status).toBe(404);
+    expect(await deleted.json()).toEqual({ error: "not_found" });
+  });
+
+  test("GET /:key and GET /:key/versions resolve to their own routes", async () => {
+    await api(ctx.app, "PUT", base("/K"), { cookie, body: { value: "one" } });
+    await api(ctx.app, "PUT", base("/K"), { cookie, body: { value: "two" } });
+
+    const single = await api(ctx.app, "GET", base("/K"), { cookie });
+    expect(single.status).toBe(200);
+    expect(((await single.json()) as { version: number }).version).toBe(2);
+
+    const versionsRes = await api(ctx.app, "GET", base("/K/versions"), {
+      cookie,
+    });
+    expect(versionsRes.status).toBe(200);
+    const { versions } = (await versionsRes.json()) as {
+      versions: Array<{ version: number }>;
+    };
+    expect(versions).toHaveLength(2);
+  });
+
+  test("include_value appends exactly one secrets.read entry; metadata none", async () => {
+    await api(ctx.app, "PUT", base("/K"), { cookie, body: { value: "v" } });
+
+    // Metadata-only read: no audit entry.
+    await api(ctx.app, "GET", base("/K"), { cookie });
+    const before = await ctx.audit.readAudit({ projectId }, { limit: 50 });
+    expect(
+      before.entries.filter((e) => e.action === "secrets.read"),
+    ).toHaveLength(0);
+
+    // Value read: exactly one entry with envId + key fields.
+    await api(ctx.app, "GET", `${base("/K")}?include_value=true`, { cookie });
+    const after = await ctx.audit.readAudit({ projectId }, { limit: 50 });
+    const reads = after.entries.filter((e) => e.action === "secrets.read");
+    expect(reads).toHaveLength(1);
+    expect(reads[0]?.envId).toBe(envId);
+    expect(reads[0]?.key).toBe("K");
+  });
+
+  test("read-role member gets 200; non-member gets 404", async () => {
+    await api(ctx.app, "PUT", base("/K"), { cookie, body: { value: "v" } });
+    const reader = await createMemberUser(ctx.app, cookie, "reader");
+    const stranger = await createMemberUser(ctx.app, cookie, "stranger");
+    const added = await api(
+      ctx.app,
+      "POST",
+      `/api/projects/${projectId}/members`,
+      {
+        cookie,
+        body: { userId: reader.userId, role: "read" },
+      },
+    );
+    expect(added.status).toBe(201);
+
+    const ok = await api(ctx.app, "GET", `${base("/K")}?include_value=true`, {
+      cookie: reader.cookie,
+    });
+    expect(ok.status).toBe(200);
+    expect(((await ok.json()) as { value?: string }).value).toBe("v");
+
+    const denied = await api(ctx.app, "GET", base("/K"), {
+      cookie: stranger.cookie,
+    });
+    expect(denied.status).toBe(404);
+    expect(await denied.json()).toEqual({ error: "not_found" });
+  });
+
+  test("env-scoped service token reads in scope; unlisted env → 403", async () => {
+    await api(ctx.app, "PUT", base("/K"), { cookie, body: { value: "v" } });
+    const detail = await api(ctx.app, "GET", `/api/projects/${projectId}`, {
+      cookie,
+    });
+    const { environments } = (await detail.json()) as {
+      environments: Array<{ id: string }>;
+    };
+    const otherEnvId = (
+      environments.find((e) => e.id !== envId) as { id: string }
+    ).id;
+    const minted = await api(
+      ctx.app,
+      "POST",
+      `/api/projects/${projectId}/tokens`,
+      {
+        cookie,
+        body: { name: "scoped", scope: "read", environmentIds: [envId] },
+      },
+    );
+    expect(minted.status).toBe(201);
+    const { token } = (await minted.json()) as { token: string };
+
+    const inScope = await api(
+      ctx.app,
+      "GET",
+      `${base("/K")}?include_value=true`,
+      { bearer: token },
+    );
+    expect(inScope.status).toBe(200);
+    expect(((await inScope.json()) as { value?: string }).value).toBe("v");
+
+    const outOfScope = await api(
+      ctx.app,
+      "GET",
+      `/api/projects/${projectId}/environments/${otherEnvId}/secrets/K`,
+      { bearer: token },
+    );
+    expect(outOfScope.status).toBe(403);
+    expect(await outOfScope.json()).toEqual({ error: "forbidden" });
   });
 });
 
