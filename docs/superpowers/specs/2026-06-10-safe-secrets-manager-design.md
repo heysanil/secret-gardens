@@ -172,3 +172,13 @@ Login: CLI starts localhost server (random port, one-time state) → opens `http
 ## Verification (end-to-end)
 
 From a clean clone: `scripts/setup.sh && docker compose up` → browser `/setup` creates owner → create project → set secrets in web → `safe login` (loopback) → `safe init` → `safe pull` writes `.env` → `safe run -- env | grep KEY` shows injection → create read-only service token, `SAFE_TOKEN=… safe pull` in a clean shell works, push fails → check audit table shows the reads/writes → `docker compose restart` → data intact → KEK rotation script with swapped keys → secrets still decrypt. Plus `bun test` green at every phase boundary.
+
+## Implementation deviations (sanctioned)
+
+Where the shipped code intentionally departs from the design above:
+
+1. **better-auth `admin` plugin instead of the `organization` plugin.** safe is a single-org instance; `user.role` (`owner`/`admin`/`member`) plus the admin create-user API covers the role model without unused org/invitation tables or an SMTP dependency.
+2. **`GET /api/users` is open to all authenticated users** (not instance-admin only): the member picker needs the directory, and names/emails of co-workers on a private instance are not sensitive enough to gate.
+3. **Single-secret read endpoint** `GET .../environments/:envId/secrets/:key` (with optional `?include_value=true`) was added so `safe secrets get K` doesn't decrypt the whole environment.
+4. **`user_tokens.created_via` column** (`session` | `token`) records how a PAT was minted; token-minted PATs are lifetime-capped (≤30 days, never outliving the parent) and surfaced in the UI.
+5. **`safe rotate dek --project <slug>`** lets the CLI target a project explicitly instead of requiring a `.safe.json` in the working directory.
